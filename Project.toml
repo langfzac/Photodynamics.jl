@@ -1,0 +1,13 @@
+name = "Photodynamics"
+uuid = "19d19b8a-d445-44de-bef5-58c3ebc30fa7"
+authors = ["Zach Langford <langfzac@uw.edu> and contributors"]
+version = "0.1.0"
+
+[compat]
+julia = "1.6"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
