@@ -1,4 +1,4 @@
-import Limbdark: transit_poly_g
+import Photodynamics: transit_poly_g
 
 struct Lightcurve
     dt     # Exposure time
