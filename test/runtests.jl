@@ -9,9 +9,8 @@ function setup_ICs(n,BJD,t0)
     return ic
 end
 
-function setup_integrator(ic)
+function setup_integrator(ic, tmax)
     h = ic.elements[2,2] / 40
-    tmax = 2.0
     intr = Integrator(h, 0.0, tmax)
     return intr
 end
@@ -35,6 +34,11 @@ function get_radius_ratios_trappist(n)
     return sqrt.(depth)[1:n-1]
 end
 
+function get_limdark_coeffs_trappist()
+    q = [0.11235270319764341, 0.42037661035916857]#, 0.352424321959808, 0.2864053200404355]
+    return [2*sqrt(q[1])*q[2],2*sqrt(q[1])*(1-2q[2])]
+end
+
 normalize_points!(points, rstar) = points./=rstar
 ################################################################################
 
@@ -44,4 +48,9 @@ normalize_points!(points, rstar) = points./=rstar
         include("test_impact_parameter.jl")
     end
     println("Done.")
+    print("Lightcurve...")
+    @testset "Lightcurve" begin
+        include("test_simpson.jl")
+        include("test_compute_lightcurve.jl")
+    end
 end

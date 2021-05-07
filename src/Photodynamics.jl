@@ -1,15 +1,17 @@
 module Photodynamics
 
 using Reexport
-@reexport using NbodyGradient
+@reexport using NbodyGradient, Limbdark
 
 using StaticArrays, LinearAlgebra, Roots
 
-export dot
-export TransitSeries
+export dot, compute_lightcurve!
+export TransitSeries, Lightcurve
 
 include("impact.jl")
 include("TransitSeries.jl")
+include("simpson.jl")
+include("Lightcurve.jl")
 
 """Constant coefficients for the series expansion."""
 struct Coefficients{T<:AbstractFloat}

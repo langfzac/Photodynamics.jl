@@ -4,8 +4,9 @@ import Photodynamics:compute_impact_parameter
 function run_tests(n)
     # Setup the simulation
     BJD = 7250.0; t0_ic = 7.0
+    tmax = 2.0
     ic = setup_ICs(n,BJD,t0_ic)
-    intr = setup_integrator(ic)
+    intr = setup_integrator(ic, tmax)
     tt = compute_transit_times(ic, intr)
     pd = compute_pd(ic, tt, intr)
 
