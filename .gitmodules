@@ -1,0 +1,3 @@
+[submodule "src/Limbdark.jl"]
+	path = src/Limbdark.jl
+	url = https://github.com/rodluger/limbdark.jl

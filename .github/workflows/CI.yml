@@ -19,6 +19,8 @@ jobs:
           - x64
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: true
       - uses: julia-actions/setup-julia@v1
         with:
           version: ${{ matrix.version }}
@@ -40,6 +42,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: true
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1'
