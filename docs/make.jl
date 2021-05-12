@@ -20,4 +20,5 @@ makedocs(;
 
 deploydocs(;
     repo="github.com/langfzac/Photodynamics.jl",
+    devbranch="main"
 )
