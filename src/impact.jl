@@ -12,6 +12,14 @@ function components(d,h::T) where T<:AbstractFloat
 end
 
 """Compute the impact parameter at t=tc using a series expansion about t0."""
+function compute_impact_parameter(tc::T, t0::T, xc::AbstractVector{T}, yc::AbstractVector{T}) where T<:AbstractFloat
+    t = tc - t0
+    ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
+    lx = dot(xc, ts)
+    ly = dot(yc, ts)
+    return sqrt(lx*lx + ly*ly)
+end
+
 function compute_impact_parameter(tc::T,t0::T,h::T,points) where T<:AbstractFloat
     t = tc - t0
     ts = SVector(1.0,t,t*t,t*t*t,t*t*t*t)
