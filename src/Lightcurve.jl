@@ -43,6 +43,9 @@ function compute_lightcurve!(lc, ts; tol=1e-6, maxdepth=6)
     ia = IntegralArrays(1, maxdepth, tol) # Gradients not implemented yet
     lc.flux .= 0.0 # Zero out model flux
 
+    # Make transit structure (will be updated with proper r and b later)
+    trans = transit_init(lc.k[1], 0.0, lc.u_n, false)
+
     # Iterate over each transit time and sum Lightcurve
     for it in eachindex(ts.times[:,1])
         # check for transit
@@ -60,7 +63,7 @@ function compute_lightcurve!(lc, ts; tol=1e-6, maxdepth=6)
         end
 
         # Integrate lightcurve
-        trans = transit_init(lc.k[ib-1], b0, lc.u_n, false)
+        trans.r = lc.k[ib-1]
         integrate_transit!(ib,it,t0,tc,trans,lc,ts,ia)
     end
     lc.flux .*= lc.dtinv # Divide by exposure time to get average flux
@@ -92,21 +95,24 @@ function integrate_transit!(ib,it,t0,tc,trans,lc,ts,ia)
         end
         push!(tlim, tend)
 
+        # Get series expansion components
+        xc = components(@views(ts.points[ib,it,:,1]), ts.h)
+        yc = components(@views(ts.points[ib,it,:,2]), ts.h)
         # Integrate over exposure
         for j in 1:length(tlim)-1
-            integrate_timestep!(t0, tlim[j], tlim[j+1], ts.h, @views(ts.points[ib,it,:,:]), trans, ia)
+            integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
             lc.flux[i] += ia.I_of_x[1]
         end
     end
     return
 end
 
-function integrate_timestep!(t0::T, a, b, h, points, trans, ia) where T<:AbstractFloat
+function integrate_timestep!(t0::T, a, b, xc, yc, trans, ia) where T<:AbstractFloat
     # Computes the flux as function of time.
     # Closure to be passed to integrator function
-    transit_flux! = let trans=trans, t0=t0, points=points, h=h
+    transit_flux! = let trans=trans, t0=t0, xc=xc, yc=yc
         (time::T, flux::Vector{T}) -> begin
-            trans.b = compute_impact_parameter(time, t0, h, points)
+            trans.b = compute_impact_parameter(time, t0, yc, xc)
             flux[1] = transit_poly_g(trans)-1
         end
     end
