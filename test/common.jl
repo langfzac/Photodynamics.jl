@@ -1,0 +1,52 @@
+using DelimitedFiles, FiniteDifferences
+
+function setup_ICs(n, BJD::T, t0::T) where T<:Real
+    elements = T.(readdlm("elements.txt", ',')[1:n,:])
+    elements[2:end,3] .-= BJD # Shift initial transit times
+    ic = ElementsIC(t0, n, elements)
+    return ic
+end
+
+function setup_integrator(ic, tmax::T) where T<:Real
+    h = ic.elements[2,2] / 40
+    intr = Integrator(h, T(0.0), tmax)
+    return intr
+end
+
+function compute_transit_times(s, ic, intr; grad=false)
+    tt = TransitTiming(intr.tmax, ic)
+    intr(s, tt; grad=grad)
+    return tt
+end
+
+function compute_transit_times(ic, intr; grad=false)
+    s = State(ic)
+    tt = TransitTiming(intr.tmax, ic)
+    intr(s, tt; grad=grad)
+    return tt
+end
+
+function compute_pd(ic, tt, intr; grad=false)
+    s = State(ic);
+    pd = TransitSeries(tt.tt, ic);
+    intr(s, pd;grad=grad)
+    return pd
+end
+
+function compute_pd(s, ic, tt, intr; grad=false)
+    pd = TransitSeries(copy(tt.tt), ic);
+    intr(s, pd; grad=grad)
+    return pd
+end
+
+function get_radius_ratios_trappist(n)
+    depth = [0.7277,0.6940,0.3566,0.4802,0.634,0.764,0.346] .* 0.01
+    return sqrt.(depth)[1:n-1]
+end
+
+function get_limdark_coeffs_trappist()
+    q = [0.11235270319764341, 0.42037661035916857]#, 0.352424321959808, 0.2864053200404355]
+    return [2*sqrt(q[1])*q[2],2*sqrt(q[1])*(1-2q[2])]
+end
+
+normalize_points!(points, rstar) = points./=rstar

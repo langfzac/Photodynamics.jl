@@ -22,7 +22,8 @@
     nobs = round(Int64, obs_duration * 30 * 24)
     tobs = collect(pd.times[1] - 10 * intr.h:obs_duration / nobs:obs_duration);
     lc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k);
-
     compute_lightcurve!(lc, pd, tol=1e-11, maxdepth=40)
+
+    @time compute_lightcurve!(lc, pd, tol=1e-11, maxdepth=40)
     @test 1 == 1
 end
