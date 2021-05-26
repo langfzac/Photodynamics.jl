@@ -1,17 +1,18 @@
 # NbodyGradient integration to compute points about each transit for series expansion.
-import NbodyGradient: TransitOutput, InitialConditions
+import NbodyGradient: TransitOutput, InitialConditions, Derivatives
 import NbodyGradient: check_step, set_state!
 
 struct TransitSeries{T<:AbstractFloat} <: TransitOutput{T}
-    times::Vector{T}    # Transit times, sequentially
-    bodies::Vector{Int64}   # Transiting body at the ith transit time
-    points::Array{T}    # [body, transit, 7, 2]
+    times::Vector{T}      # Transit times, sequentially
+    bodies::Vector{Int64} # Transiting body at the ith transit time
+    points::Array{T}      # [body, transit, 7, 2]
+    dpoints::Array{T}     # [body, transit, 7, 2, parameter]
 
     # Internal values/arrays
-    h::T                 # Stepsize for series points
-    ntt::Int64           # Total number of transits
-    count::Vector{Int64} # Number of transits for ith body
-    s_transit::State{T}  # Duplicate state to do sub-integrations
+    h::T                  # Stepsize for series points
+    ntt::Int64            # Total number of transits
+    intr_times::Vector{T} # Times to integrate to anc compute points
+    count::Vector{Int64}  # Number of transits for ith body
 end
 
 function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h=2e-2) where T<:AbstractFloat
@@ -38,58 +39,49 @@ function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h=2e-2) where
     times = copy(tmp[:,1])
     bodies = copy(Int64.(tmp[:,2]))
 
-    s_transit = State(ic)
+    # Now compute the integration times
+    intr_times = T[]
+    for t in times
+        for i in -3:1:3
+            push!(intr_times, t + i*h)
+        end
+    end
+
     points = zeros(T,ic.nbody,ntt,7,2)
-    TransitSeries(times, bodies, points, convert(T,h), ntt, count, s_transit)
+    dpoints = zeros(T,ic.nbody,ntt,7,2,ic.nbody,7)
+    TransitSeries(times, bodies, points, dpoints, convert(T,h), ntt, intr_times, count)
 end
 
-"""Integrate to each transit time and record 7 points for series expansion."""
+"""Integrate to each time (expanded from transit time) and record points for series expansion."""
 function (intr::Integrator)(s::State{T},ts::TransitSeries{T}; grad::Bool=false) where T<:AbstractFloat
-    t0 = s.t[1]                             # Initial time
-    tmax = maximum(ts.times)                # Final transit time
-    nsteps = abs(round(Int64, tmax/intr.h)) # Total integration steps
-    h = intr.h * check_step(t0, tmax+t0)    # Make sure we step in proper direction
 
-    # Run integrator, check for transits against list of times, record sky positions
-    istep = 0; itime = 1;
-    for _ in 1:nsteps
-        istep += 1
-        tc = ts.times[itime] # Current time
-        tnext = t0 + (istep * h) # Time after next step
+    # Run integrator and record sky positions for list of integration times
+    count = 1; itime = 1; ibody = ts.bodies[itime]
+    for t in ts.intr_times
 
-        # Check if we will pass a transit
-        if tnext >= tc
-            # Save current state
-            set_state!(ts.s_transit, s)
-
-            # Integrate forward to transit time
-            htrans = tc - s.t[1]
-            intr.scheme(ts.s_transit, htrans)
-
-            # Compute sky-plane positions for each body
-            compute_points!(itime, ts, intr)
-
+        # Update itime and ibody
+        if count > 7
             itime += 1
+            ibody = ts.bodies[itime]
+            count = 1
         end
 
-        # Now, step saved state.
-        intr.scheme(s,h)
-        s.t[1] = tnext
+        # Integrate to t
+        intr(s,t,grad=grad)
 
-        # Break if no more transits
-        if itime > ts.ntt; break; end;
-    end
-end
+        # record points for transiting body
+        ts.points[ibody,itime,count,1] = s.x[1,ibody]
+        ts.points[ibody,itime,count,2] = s.x[2,ibody]
 
-function compute_points!(itime::Int64,ts::TransitSeries{T},intr::Integrator{T}) where T<:AbstractFloat
-    # Want to compute positions from transit-3h -> transit+3h
-    # Integrate backward from the transit time
-    for _ in 1:4; intr.scheme(ts.s_transit, -ts.h); end
+        if grad
+            # Get gradients of points wrt initial orbital elements and masses
+            # p body, q element
+            for p in 1:s.n, q in 1:7
+                ts.dpoints[ibody,itime,count,1,p,q] = s.jac_step[(ibody-1)*7+1,(p-1)*7+q]
+                ts.dpoints[ibody,itime,count,2,p,q] = s.jac_step[(ibody-1)*7+2,(p-1)*7+q]
+            end
+        end
 
-    # Compute 7 sky-positions about the transit
-    ibody = ts.bodies[itime]
-    for n in 1:7
-        intr.scheme(ts.s_transit, ts.h)
-        @views ts.points[ibody,itime,n,:] .= ts.s_transit.x[1:2,ibody]
+        count += 1
     end
 end
