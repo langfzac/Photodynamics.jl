@@ -29,3 +29,21 @@ function compute_impact_parameter(tc::T,t0::T,h::T,points) where T<:AbstractFloa
     ly = dot(yc,ts)
     return sqrt(lx*lx + ly*ly)
 end
+
+function compute_impact_parameter!(tc::T, t0::T, xc, yc, dxc, dyc, grad) where T<:AbstractFloat
+    t = tc - t0
+    ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
+    lx = dot(xc, ts)
+    ly = dot(yc, ts)
+    b = sqrt(lx*lx + ly*ly)
+
+    dbdlx = lx/b; dbdly = ly/b;
+    N = length(grad)
+    for p in 1:N
+        dlxdp = dot(dxc[p],ts)
+        dlydp = dot(dyc[p],ts)
+        grad[p] = dbdlx*dlxdp + dbdly*dlydp
+    end
+
+    return b
+end
