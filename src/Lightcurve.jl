@@ -1,44 +1,44 @@
 import Photodynamics: transit_poly_g
 
-struct Lightcurve
-    dt     # Exposure time
-    tobs   # Observed times
-    fobs   # Observed flux
-    eobs   # Measurement errors
-    nobs   # number of flux measurements
-    flux   # Computed model flux
+struct Lightcurve{T<:Real}
+    dt::T     # Exposure time
+    tobs::Vector{T}   # Observed times
+    fobs::Vector{T}   # Observed flux
+    eobs::Vector{T}   # Measurement errors
+    nobs::Int64       # number of flux measurements
+    flux::Vector{T}   # Computed model flux
 
     # Transit parameters
-    u_n # Limbdark coefficients
-    k   # radius ratios
+    u_n::Vector{T} # Limbdark coefficients
+    k::Vector{T}   # radius ratios
 
     # Interal arrays/values
-    dtinv
+    dtinv::T
 
-    function Lightcurve(dt, tobs, fobs, eobs, u_n, k)
+    function Lightcurve(dt::T, tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}) where T<:Real
         @assert (length(tobs) == length(fobs)) && (length(tobs) == length(eobs)) "Data arrays are different sizes"
         nobs = length(tobs)
-        flux = zeros(nobs)
+        flux = zeros(T,nobs)
         dtinv = inv(dt)
-        return new(dt,tobs,fobs,eobs,nobs,flux,u_n,k,dtinv)
+        return new{T}(dt,tobs,fobs,eobs,nobs,flux,u_n,k,dtinv)
     end
 end
 
-function points_of_contact_4(t0,h,points,k)
+function points_of_contact_4(t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
     t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0-h)
     t2 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), t0-h)
     t3 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), t0+h)
     t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0+h)
-    return [t1,t2,t3,t4]
+    return SVector(t1,t2,t3,t4)
 end
 
-function points_of_contact_2(t0,h,points,k)
+function points_of_contact_2(t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
     t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0-h)
     t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0+h)
-    return [t1,t4]
+    return SVector(t1,t4)
 end
 
-function compute_lightcurve!(lc, ts; tol=1e-6, maxdepth=6)
+function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
 
     ia = IntegralArrays(1, maxdepth, tol) # Gradients not implemented yet
     lc.flux .= 0.0 # Zero out model flux
@@ -47,7 +47,7 @@ function compute_lightcurve!(lc, ts; tol=1e-6, maxdepth=6)
     trans = transit_init(lc.k[1], 0.0, lc.u_n, false)
 
     # Iterate over each transit time and sum Lightcurve
-    for it in eachindex(ts.times[:,1])
+    for it in eachindex(ts.times)
         # check for transit
         t0 = ts.times[it]   # Get transit time
         ib = ts.bodies[it]  # Get transiting body
@@ -70,7 +70,7 @@ function compute_lightcurve!(lc, ts; tol=1e-6, maxdepth=6)
     return
 end
 
-function integrate_transit!(ib,it,t0,tc,trans,lc,ts,ia)
+function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
     nc = length(tc) # Number of points of contact
     dt = lc.dt
 
@@ -107,7 +107,7 @@ function integrate_transit!(ib,it,t0,tc,trans,lc,ts,ia)
     return
 end
 
-function integrate_timestep!(t0::T, a, b, xc, yc, trans, ia) where T<:AbstractFloat
+function integrate_timestep!(t0::T, a::T, b::T, xc::SVector{N,T}, yc::SVector{N,T}, trans::Transit_Struct{T}, ia::IntegralArrays{T}) where {N, T<:Real}
     # Computes the flux as function of time.
     # Closure to be passed to integrator function
     transit_flux! = let trans=trans, t0=t0, xc=xc, yc=yc

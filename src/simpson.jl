@@ -1,6 +1,6 @@
 # A slight re-write of simpson_vec from github.com/rodluger/limbdark.jl
 
-struct IntegralArrays{T<:AbstractFloat}
+struct IntegralArrays{T<:Real}
     g::Matrix{T}
     A::Matrix{T}
     S::Array{T,3}
@@ -11,7 +11,7 @@ struct IntegralArrays{T<:AbstractFloat}
     maxdepth::Int64
     tol::T
 
-    function IntegralArrays(nf::Int64, maxdepth::Int64, tol::T) where T<:AbstractFloat
+    function IntegralArrays(nf::Int64, maxdepth::Int64, tol::T) where T<:Real
         g = zeros(T, nf, 5)
         A = zeros(T, nf, 3)
         S = zeros(T, nf, 3, maxdepth)
@@ -21,7 +21,7 @@ struct IntegralArrays{T<:AbstractFloat}
     end
 end
 
-function integrate_simpson!(a::T, b::T, f, ia) where T<:AbstractFloat
+function integrate_simpson!(a::T, b::T, f::Function, ia::IntegralArrays{T}) where T<:Real
     third = one(T) / 3
     i = zero(T)
     m = 0; n = 0

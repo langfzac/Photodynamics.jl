@@ -69,7 +69,8 @@ function test_impact_parameter_derivatives(n)
     # Compute the impact parameter
     # Used in finite difference derivatives
     function compute_b(coords, s_copy, tt, intr, ic, it)
-        h = 2e-2
+        T = eltype(coords)
+        h::T = 2e-2
         s = deepcopy(s_copy)
         coords = reshape(coords, 7, n)
         for (i, col) in enumerate(eachcol(coords))
