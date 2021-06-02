@@ -112,7 +112,7 @@ function integrate_timestep!(t0::T, a::T, b::T, xc::SVector{N,T}, yc::SVector{N,
     # Closure to be passed to integrator function
     transit_flux! = let trans=trans, t0=t0, xc=xc, yc=yc
         (time::T, flux::Vector{T}) -> begin
-            trans.b = compute_impact_parameter(time, t0, yc, xc)
+            trans.b = compute_impact_parameter(time, t0, xc, yc)
             flux[1] = transit_poly_g(trans)-1
         end
     end
