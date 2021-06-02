@@ -1,7 +1,7 @@
 # Uses method from Parviainen et al. 2020 to compute the sky-separation.
 
 """Compute the derivative components of the series expansion."""
-function components(d,h::T) where T<:AbstractFloat
+function components(d::AbstractVector{T},h::T) where T<:AbstractFloat
     A = d[7]-d[1]; B = d[1]+d[7]; C = d[2]-d[6]
     D = d[2]+d[6]; E = d[5]-d[3]; F = d[3]+d[5]
     v = dot(SVector(A, C, E), COEFF.vd)/h
@@ -12,7 +12,7 @@ function components(d,h::T) where T<:AbstractFloat
 end
 
 """Compute the impact parameter at t=tc using a series expansion about t0."""
-function compute_impact_parameter(tc::T, t0::T, xc::AbstractVector{T}, yc::AbstractVector{T}) where T<:AbstractFloat
+function compute_impact_parameter(tc::T, t0::T, xc::AbstractVector{T}, yc::AbstractVector{T}) where T<:Real
     t = tc - t0
     ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
     lx = dot(xc, ts)
@@ -20,7 +20,7 @@ function compute_impact_parameter(tc::T, t0::T, xc::AbstractVector{T}, yc::Abstr
     return sqrt(lx*lx + ly*ly)
 end
 
-function compute_impact_parameter(tc::T,t0::T,h::T,points) where T<:AbstractFloat
+function compute_impact_parameter(tc::T,t0::T,h::T,points::AbstractMatrix{T}) where T<:Real
     t = tc - t0
     ts = SVector(1.0,t,t*t,t*t*t,t*t*t*t)
     xc = components(points[:,1], h)
@@ -30,7 +30,7 @@ function compute_impact_parameter(tc::T,t0::T,h::T,points) where T<:AbstractFloa
     return sqrt(lx*lx + ly*ly)
 end
 
-function compute_impact_parameter!(tc::T, t0::T, xc, yc, dxc, dyc, grad) where T<:AbstractFloat
+function compute_impact_parameter!(tc::T, t0::T, xc, yc, dxc, dyc, grad) where T<:Real
     t = tc - t0
     ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
     lx = dot(xc, ts)

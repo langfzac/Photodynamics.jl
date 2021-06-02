@@ -1,12 +1,12 @@
 # NbodyGradient integration to compute points about each transit for series expansion.
-import NbodyGradient: TransitOutput, InitialConditions, Derivatives
+import NbodyGradient: InitialConditions, Derivatives, ElementsIC
 import NbodyGradient: check_step, set_state!
 
-struct TransitSeries{T<:AbstractFloat} <: TransitOutput{T}
+struct TransitSeries{T<:Real}
     times::Vector{T}      # Transit times, sequentially
     bodies::Vector{Int64} # Transiting body at the ith transit time
-    points::Array{T}      # [body, transit, 7, 2]
-    dpoints::Array{T}     # [body, transit, 7, 2, parameter]
+    points::Array{T, 4}      # [body, transit, 7, 2]
+    dpoints::Array{T, 6}     # [body, transit, 7, 2, body, parameter]
 
     # Internal values/arrays
     h::T                  # Stepsize for series points
@@ -15,7 +15,7 @@ struct TransitSeries{T<:AbstractFloat} <: TransitOutput{T}
     count::Vector{Int64}  # Number of transits for ith body
 end
 
-function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h=2e-2) where T<:AbstractFloat
+function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h::T=T(2e-2)) where T<:Real
     ntt = sum(times .> ic.t0) # Total transits, assumes no transits <= ic.t0
 
     # Flatten transit times and assign a body index
@@ -53,7 +53,7 @@ function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h=2e-2) where
 end
 
 """Integrate to each time (expanded from transit time) and record points for series expansion."""
-function (intr::Integrator)(s::State{T},ts::TransitSeries{T}; grad::Bool=false) where T<:AbstractFloat
+function (intr::Integrator)(s::State{T},ts::TransitSeries{T}; grad::Bool=false) where T<:Real
 
     # Run integrator and record sky positions for list of integration times
     count = 1; itime = 1; ibody = ts.bodies[itime]
