@@ -5,19 +5,22 @@ struct IntegralArrays{T<:Real}
     A::Matrix{T}
     S::Array{T,3}
     f_of_x::Vector{T}
-    I_of_x::Vector{T}
+    I_of_f::Vector{T}
 
     nf::Int64
     maxdepth::Int64
     tol::T
 
     function IntegralArrays(nf::Int64, maxdepth::Int64, tol::T) where T<:Real
+        # Add one if derivatives are computed
+        # length(dfdg) == length(dfdu) + 1
+        if nf > 1; nf += 1; end
         g = zeros(T, nf, 5)
         A = zeros(T, nf, 3)
         S = zeros(T, nf, 3, maxdepth)
         f_of_x = zeros(T, nf)
-        I_of_x = zeros(T, nf)
-        return new{T}(g, A, S, f_of_x, I_of_x, nf, maxdepth, tol)
+        I_of_f = zeros(T, nf)
+        return new{T}(g, A, S, f_of_x, I_of_f, nf, maxdepth, tol)
     end
 end
 
@@ -31,13 +34,14 @@ function integrate_simpson!(a::T, b::T, f::Function, ia::IntegralArrays{T}) wher
     A = ia.A
     S = ia.S
     f_of_x = ia.f_of_x
-    I_of_f = ia.I_of_x
+    I_of_f = ia.I_of_f
     epsilon = ia.tol
     N = ia.maxdepth
     nf = ia.nf
 
     # Zero out integral array
     I_of_f .= zero(T)
+    f_of_x .= zero(T)
 
     f(a,f_of_x)
     @inbounds for j = 1:nf

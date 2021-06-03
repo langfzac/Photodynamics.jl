@@ -101,7 +101,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
         # Integrate over exposure
         for j in 1:length(tlim)-1
             integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
-            lc.flux[i] += ia.I_of_x[1]
+            lc.flux[i] += ia.I_of_f[1]
         end
     end
     return
