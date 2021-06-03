@@ -1,5 +1,3 @@
-import Photodynamics: IntegralArrays, integrate_simpson!
-
 ## Simple test of simpson integration ##
 function f(x,s)
     s[1] = x^2 + 2*x

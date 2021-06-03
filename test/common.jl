@@ -1,5 +1,10 @@
 using DelimitedFiles, FiniteDifferences
 
+import Photodynamics: components, transit_init
+import Photodynamics: compute_impact_parameter, compute_impact_parameter!
+import Photodynamics: IntegralArrays, integrate_simpson!
+import Photodynamics: NbodyGradient.amatrix
+
 function setup_ICs(n, BJD::T, t0::T) where T<:Real
     elements = T.(readdlm("elements.txt", ',')[1:n,:])
     elements[2:end,3] .-= BJD # Shift initial transit times

@@ -1,7 +1,4 @@
 # Test the precision of the series expansion
-import Photodynamics: compute_impact_parameter, compute_impact_parameter!, components
-import Photodynamics:NbodyGradient.amatrix
-
 function test_impact_parameter_accuracy(n)
     # Setup the simulation
     BJD = 7250.0; t0_ic = 7.0
