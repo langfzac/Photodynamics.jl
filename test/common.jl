@@ -3,6 +3,7 @@ using DelimitedFiles, FiniteDifferences
 import Photodynamics: components, transit_init
 import Photodynamics: compute_impact_parameter, compute_impact_parameter!
 import Photodynamics: IntegralArrays, integrate_simpson!
+import Photodynamics: integrate_timestep!
 import Photodynamics: NbodyGradient.amatrix
 
 function setup_ICs(n, BJD::T, t0::T) where T<:Real
