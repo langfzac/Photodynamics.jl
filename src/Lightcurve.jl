@@ -120,3 +120,25 @@ function integrate_timestep!(t0::T, a::T, b::T, xc::SVector{N,T}, yc::SVector{N,
     # Integrate transit_flux! over interval [a,b]
     integrate_simpson!(a,b,transit_flux!,ia)
 end
+
+function integrate_timestep!(t0::T, a::T, b::T, xc, yc, dxc, dyc, trans, ia, dbdq0, ki) where T<:Real
+    n_coords = length(dbdq0)
+
+    # Map radius ratio index to the gradient array index.
+    k_ind = ki + 1 + n_coords
+
+    # Compute the flux and derivatives
+    transit_flux_grad! = let trans=trans, t0=t0, xc=xc, yc=yc, dbdq0=dbdq0, n_coords = n_coords, k_ind=k_ind
+        (time::T, dflux::Vector{T}) -> begin
+            trans.b = compute_impact_parameter!(time, t0, xc, yc, dxc, dyc, dbdq0)
+            dflux .= 0.0
+            dflux[1] = transit_poly_g!(trans)-1 # Flux at time
+            dflux[2:1+n_coords] .= trans.dfdrb[2] .* dbdq0 # Gradient wrt the initial conditions
+            dflux[k_ind] = trans.dfdrb[1] # radius ratio (derivative of others are zero)
+            dflux[end-trans.n:end] .= trans.dfdg # dfdg
+        end
+    end
+
+    # Integrate flux and derivatives over exposure interval [a,b]
+    integrate_simpson!(a,b,transit_flux_grad!,ia)
+end
