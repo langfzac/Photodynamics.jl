@@ -7,6 +7,9 @@ struct Lightcurve{T<:Real}
     eobs::Vector{T}   # Measurement errors
     nobs::Int64       # number of flux measurements
     flux::Vector{T}   # Computed model flux
+    dfdu::Matrix{T}   # Derivative of flux wrt limbdark coefficients
+    dfdk::Matrix{T}   # Derivatives wrt the radius ratios
+    dfdq0::Matrix{T} # Derivatives wrt initial Nbody Cartesian coordinates and masses
 
     # Transit parameters
     u_n::Vector{T} # Limbdark coefficients
@@ -14,16 +17,32 @@ struct Lightcurve{T<:Real}
 
     # Interal arrays/values
     dtinv::T
+    dbdq0::Vector{T}
+    n_params::Int64 # Number of nbody model parameters
+    do_grad::Bool
 
-    function Lightcurve(dt::T, tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}) where T<:Real
+    function Lightcurve(dt::T, tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}, n_params::Int64=0) where T<:Real
         @assert (length(tobs) == length(fobs)) && (length(tobs) == length(eobs)) "Data arrays are different sizes"
+        @assert n_params >= 0 "Number of model parameters must be a positive integer"
+        n_params > 0 ? do_grad = true : do_grad = false
         nobs = length(tobs)
         flux = zeros(T,nobs)
         dtinv = inv(dt)
-        return new{T}(dt,tobs,fobs,eobs,nobs,flux,u_n,k,dtinv)
+        dfdu = zeros(T, nobs, length(u_n))
+        dfdk = zeros(T, nobs, length(k))
+        dfdq0 = zeros(T, nobs, n_params)
+        dbdq0 = zeros(T, n_params)
+        return new{T}(dt,tobs,fobs,eobs,nobs,flux,dfdu,dfdk,dfdq0,u_n,k,dtinv,dbdq0,n_params,do_grad)
     end
 end
 
+"""Zero out the model arrays"""
+function zero_out!(lc::Lightcurve{T}) where T<:Real
+    lc.dfdu .= 0.0
+    lc.dfdk .= 0.0
+    lc.dfdq0 .= 0.0
+    lc.flux .= 0.0
+end
 function points_of_contact_4(t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
     t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0-h)
     t2 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), t0-h)
@@ -40,11 +59,11 @@ end
 
 function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
 
-    ia = IntegralArrays(1, maxdepth, tol) # Gradients not implemented yet
-    lc.flux .= 0.0 # Zero out model flux
+    zero_out!(lc) # Zero out model arrays
+    ia = IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k)) : 1, maxdepth, tol)
 
     # Make transit structure (will be updated with proper r and b later)
-    trans = transit_init(lc.k[1], 0.0, lc.u_n, false)
+    trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
 
     # Iterate over each transit time and sum Lightcurve
     for it in eachindex(ts.times)
@@ -67,6 +86,12 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T}; tol::T=1e-
         integrate_transit!(ib,it,t0,tc,trans,lc,ts,ia)
     end
     lc.flux .*= lc.dtinv # Divide by exposure time to get average flux
+    if lc.do_grad
+        # Do the same for derivatives
+        lc.dfdk .*= lc.dtinv
+        lc.dfdu .*= lc.dtinv
+        lc.dfdq0 .*= lc.dtinv
+    end
     return
 end
 
@@ -98,10 +123,26 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
         # Get series expansion components
         xc = components(@views(ts.points[ib,it,:,1]), ts.h)
         yc = components(@views(ts.points[ib,it,:,2]), ts.h)
-        # Integrate over exposure
-        for j in 1:length(tlim)-1
-            integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
-            lc.flux[i] += ia.I_of_f[1]
+
+        if lc.do_grad
+            n_bodies = length(ts.count)
+            dxc = [components(ts.dpoints[ib,it,:,1,k,i], ts.h) for i in 1:7, k in 1:n_bodies][:]
+            dyc = [components(ts.dpoints[ib,it,:,2,k,i], ts.h) for i in 1:7, k in 1:n_bodies][:]
+
+            # integrate over exposure
+            for j in 1:length(tlim)-1
+                integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, dxc, dyc, trans, ia, lc.dbdq0, ib-1)
+                lc.flux[i] += ia.I_of_f[1]
+                lc.dfdq0[i,:] .+= ia.I_of_f[2:1+n_bodies*7]
+                lc.dfdk[i,:] .+= ia.I_of_f[2+n_bodies*7:n_bodies*8]
+                lc.dfdu[i,:] .+= trans.dgdu' * ia.I_of_f[end-trans.n:end]
+            end
+        else
+            # Integrate over exposure
+            for j in 1:length(tlim)-1
+                integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
+                lc.flux[i] += ia.I_of_f[1]
+            end
         end
     end
     return
