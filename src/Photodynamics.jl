@@ -12,9 +12,9 @@ export TransitSeries, Lightcurve
 include("Limbdark.jl/src/transit_structure.jl")
 include("Limbdark.jl/src/transit_poly_struct.jl")
 
+include("simpson.jl")
 include("impact.jl")
 include("TransitSeries.jl")
-include("simpson.jl")
 include("Lightcurve.jl")
 
 """Constant coefficients for the series expansion."""
