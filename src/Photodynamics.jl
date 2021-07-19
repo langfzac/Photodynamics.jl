@@ -3,14 +3,14 @@ module Photodynamics
 using Reexport
 @reexport using NbodyGradient
 
-using StaticArrays, LinearAlgebra, Roots, SpecialFunctions
+using StaticArrays, LinearAlgebra, Roots, SpecialFunctions, Limbdark
+
+import Limbdark: transit_poly_g, transit_poly_g!, Transit_Struct
+import NbodyGradient: InitialConditions, Derivatives, ElementsIC
+import NbodyGradient: check_step, set_state!
 
 export dot, compute_lightcurve!
 export TransitSeries, Lightcurve
-
-## Since Limbdark isn't registered, include files from submodule ##
-include("Limbdark.jl/src/transit_structure.jl")
-include("Limbdark.jl/src/transit_poly_struct.jl")
 
 include("simpson.jl")
 include("impact.jl")

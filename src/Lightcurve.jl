@@ -1,4 +1,4 @@
-import Photodynamics: transit_poly_g
+# User-level methods to compute lightcurves
 
 struct Lightcurve{T<:Real}
     dt::T     # Exposure time
@@ -43,6 +43,7 @@ function zero_out!(lc::Lightcurve{T}) where T<:Real
     lc.dfdq0 .= 0.0
     lc.flux .= 0.0
 end
+
 function points_of_contact_4(t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
     t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0-h)
     t2 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), t0-h)
