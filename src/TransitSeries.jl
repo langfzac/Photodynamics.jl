@@ -1,6 +1,4 @@
 # NbodyGradient integration to compute points about each transit for series expansion.
-import NbodyGradient: InitialConditions, Derivatives, ElementsIC
-import NbodyGradient: check_step, set_state!
 
 struct TransitSeries{T<:Real}
     times::Vector{T}      # Transit times, sequentially
