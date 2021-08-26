@@ -9,20 +9,18 @@
     tt = compute_transit_times(ic, intr);
     pd = compute_pd(ic, tt, intr);
 
-    # Normalize points to stellar radius
-    rstar = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
-    normalize_points!(pd.points, rstar);
-
+    # Transit parameters
     k = get_radius_ratios_trappist(n);
     u_n = get_limdark_coeffs_trappist();
+    rstar = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
 
     # Simulate lightcurve
     dt = 2 / 60 / 24; # 2 minutes in days
     obs_duration = maximum(tt.tt) + 5 * intr.h
     nobs = round(Int64, obs_duration * 30 * 24)
     tobs = collect(pd.times[1] - 10 * intr.h:obs_duration / nobs:obs_duration);
-    lc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k);
-    dlc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, n*7);
+    lc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar);
+    dlc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n*7);
     compute_lightcurve!(lc, pd, tol=1e-11, maxdepth=40)
 
     @time compute_lightcurve!(lc, pd, tol=1e-11, maxdepth=40)

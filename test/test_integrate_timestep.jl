@@ -1,8 +1,11 @@
 # Tests for the integrate_timestep! function
 
 # Used in finite difference derivatives
-function compute_timestep(params, t0, a, b, xc, yc, ia, ib)
-    trans = transit_init(params[ib - 1], zero(typeof(t0)), params[end - 1:end], false)
+function compute_timestep(params, t0, a, b, points, h, ia, ib, it)
+    rstar = params[end]
+    xc = components(points[ib,it,:,1]./rstar, h)
+    yc = components(points[ib,it,:,2]./rstar, h)
+    trans = transit_init(params[ib - 1], zero(typeof(t0)), params[end - 2:end-1], false)
     integrate_timestep!(t0, a, b, xc, yc, trans, ia)
     return ia.I_of_f[1]
 end
@@ -75,18 +78,15 @@ function test_integrate_timestep_derivatives(n)
         intr_big = setup_integrator(ic_big, big(tmax));
         tt_big = compute_transit_times(ic_big, intr_big);
         pd_big = compute_pd(ic_big, tt_big, intr_big, grad=false);
-        normalize_points!(pd_big.points, big(rstar));
-        xc_big = components(pd_big.points[ib,it,:,1], big(pd.h))
-        yc_big = components(pd_big.points[ib,it,:,2], big(pd.h))
         ia_big = IntegralArrays(1, maxdepth, big(tol))
 
         # Make sure we get the same answer
-        params = [k...,u_n...]
-        flux_big = compute_timestep(big.(params), big(t0), big(a), big(b), xc_big, yc_big, ia_big, ib)
+        params = [k...,u_n...,rstar]
+        flux_big = compute_timestep(big.(params), big(t0), big(a), big(b), copy(pd_big.points), pd_big.h, ia_big, ib, it)
         @test flux_big ≈ flux_int
 
         # Compute finite diff derivatives with respect to the transit parameters
-        grad_num = grad(central_fdm(5, 1), p -> compute_timestep(p, big(t0), big(a), big(b), xc_big, yc_big, ia_big, ib), big.(params))[1]
+        grad_num = grad(central_fdm(5, 1), p -> compute_timestep(p, big(t0), big(a), big(b), copy(pd_big.points), pd_big.h, ia_big, ib, it), big.(params))[1]
 
         # Compute analytic derivatives
         inds = [1,2,3,4,5,6,7]
@@ -96,18 +96,22 @@ function test_integrate_timestep_derivatives(n)
         ki = ib - 1
         trans_grad = transit_init(k[ki], 0.0, u_n, true)
         n_params = length(dbdq0) + length(k) + length(u_n) + 1 # flux
-        ia_grad = IntegralArrays(n_params, maxdepth, tol)
+        ia_grad = IntegralArrays(n_params + 1, maxdepth, tol)
         integrate_timestep!(t0, a, b, xc, yc, dxc, dyc, trans_grad, ia_grad, dbdq0, ki)
 
         # Check flux again
         @test ia_grad.I_of_f[1] ≈ flux_int
 
-        # Check derivative of radius ratios
-        @test isapprox(ia_grad.I_of_f[2 + length(dbdq0):end - 3], Float64.(grad_num[1:n-1]), norm=x -> maximum(abs.(x)))
+        # Check derivative wrt radius ratios
+        @test isapprox(ia_grad.I_of_f[2 + length(dbdq0):end-4], Float64.(grad_num[1:n-1]), norm=x -> maximum(abs.(x)))
 
-        # Now the derivatives of limbdark coefficients
-        dfdu = trans_grad.dgdu' * ia_grad.I_of_f[end - trans_grad.n:end]
-        @test isapprox(dfdu, Float64.(grad_num[n:end]), norm=x -> maximum(abs.(x)))
+        # Now the derivatives wrt limbdark coefficients
+        dfdu = trans_grad.dgdu' * ia_grad.I_of_f[end-trans_grad.n-1:end-1]
+        @test isapprox(dfdu, Float64.(grad_num[n:end-1]), norm=x -> maximum(abs.(x)))
+
+        # Now the derivatives wrt the stellar radius
+        dfdr = ia_grad.I_of_f[end] / rstar
+        @test isapprox(dfdr, Float64.(grad_num[end]), norm=x -> maximum(abs(x)), atol=1e-8)
 
         # Finally, derivatives wrt the Nbody initial conditions
         s_copy = deepcopy(State(ic_big))
