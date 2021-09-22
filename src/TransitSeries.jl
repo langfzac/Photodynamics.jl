@@ -1,10 +1,14 @@
 # NbodyGradient integration to compute points about each transit for series expansion.
 
-struct TransitSeries{T<:Real}
+abstract type AbstractTransitTimes end
+struct ComputedTimes <: AbstractTransitTimes end
+struct ProvidedTimes <: AbstractTransitTimes end
+
+struct TransitSeries{T<:Real, TT<:AbstractTransitTimes}
     times::Vector{T}      # Transit times, sequentially
     bodies::Vector{Int64} # Transiting body at the ith transit time
-    points::Array{T, 4}      # [body, transit, 7, 2]
-    dpoints::Array{T, 6}     # [body, transit, 7, 2, body, parameter]
+    points::Array{T, 4}   # [body, transit, 7, 2]
+    dpoints::Array{T, 6}  # [body, transit, 7, 2, body, parameter]
 
     # Internal values/arrays
     h::T                  # Stepsize for series points
@@ -14,6 +18,7 @@ struct TransitSeries{T<:Real}
     s_prior::State{T}
 end
 
+"""Pass a set of transit times"""
 function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h::T=T(2e-2)) where T<:Real
     ntt = sum(times .> ic.t0) # Total transits, assumes no transits <= ic.t0
 
@@ -47,7 +52,23 @@ function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h::T=T(2e-2))
     points = zeros(T,ic.nbody,ntt,7,2)
     dpoints = zeros(T,ic.nbody,ntt,7,2,ic.nbody,7)
     s_prior = State(ic)
-    TransitSeries(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
+    TransitSeries{T, ProvidedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
+end
+
+"""Need to compute transit times"""
+function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<:Real
+    ntt::Int64 = 0  # Total expected transits, assumes no transits <= ic.t0
+    for P in ic.elements[:,2]
+        ntt += round(Int64, tmax/P)
+    end
+
+    times = zeros(T, ntt)
+    bodies = zeros(Int64, ntt)
+    intr_times = zeros(T,length(times))
+    points = zeros(T,ic.nbody,ntt,7,2)
+    dpoints = zeros(T,ic.nbody,ntt,7,2,ic.nbody,7)
+    s_prior = State(ic)
+    TransitSeries{T, ComputedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
 
 """Compute 7 points about each transit time.
@@ -56,7 +77,7 @@ Integrate to right before the first transit expansion point. Save state and
 integrate for 7 steps at h=ts.h. Revert to pre-transit state and continue to
 next transit.
 """
-function (intr::Integrator)(s::State{T},ts::TransitSeries{T}; grad::Bool=false) where T<:Real
+function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes}; grad::Bool=false) where T<:Real
     if grad; d = Derivatives(T, s.n); end
 
     # Run integrator and record sky positions for list of integration times
