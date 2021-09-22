@@ -13,9 +13,9 @@ struct Lightcurve{T<:Real}
     dfdr::Vector{T}   # Derivatives wrt stellar radius
 
     # Transit parameters
-    u_n::Vector{T} # Limbdark coefficients
-    k::Vector{T}   # radius ratios
-    rstar::T       # Stellar radius
+    u_n::Vector{T}   # Limbdark coefficients
+    k::Vector{T}     # radius ratios
+    rstar::Vector{T} # Stellar radius
 
     # Interal arrays/values
     dtinv::T          # Inverse of the exposure time
@@ -35,7 +35,7 @@ struct Lightcurve{T<:Real}
         dfdq0 = zeros(T, nobs, n_params)
         dbdq0 = zeros(T, n_params)
         dfdr = zeros(T, nobs)
-        return new{T}(dt,tobs,fobs,eobs,nobs,flux,dfdu,dfdk,dfdq0,dfdr,u_n,k,rstar,dtinv,dbdq0,n_params,do_grad)
+        return new{T}(dt,tobs,fobs,eobs,nobs,flux,dfdu,dfdk,dfdq0,dfdr,u_n,k,[rstar],dtinv,dbdq0,n_params,do_grad)
     end
 end
 
@@ -48,21 +48,26 @@ function zero_out!(lc::Lightcurve{T}) where T<:Real
     lc.flux .= 0.0
 end
 
-function points_of_contact_4(t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
-    t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0-h)
-    t2 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), t0-h)
-    t3 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), t0+h)
-    t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0+h)
+function find_transit_time(t0::T, h::T, points::AbstractMatrix{T}) where T<:Real
+    tt = find_zero(t->compute_impact_parameter(t, t0, h, points), t0)
+    return tt
+end
+
+function points_of_contact_4(tt::T,t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
+    t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt-h)
+    t2 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), tt-h)
+    t3 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), tt+h)
+    t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt+h)
     return SVector(t1,t2,t3,t4)
 end
 
-function points_of_contact_2(t0::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
-    t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0-h)
-    t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), t0+h)
+function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
+    t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt-h)
+    t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt+h)
     return SVector(t1,t4)
 end
 
-function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
+function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, ProvidedTimes}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
 
     zero_out!(lc) # Zero out model arrays
     ia = IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 1) : 1, maxdepth, tol)
@@ -71,19 +76,32 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T}; tol::T=1e-
     trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
 
     # Iterate over each transit time and sum Lightcurve
+    rstar = lc.rstar[1]
     for it in eachindex(ts.times)
         # check for transit
-        t0 = ts.times[it]   # Get transit time
+        t0 = ts.times[it]   # Get "data" transit time (expansion point)
         ib = ts.bodies[it]  # Get transiting body
-        b0 = compute_impact_parameter(t0,t0,ts.h,@views(ts.points[ib,it,:,:]./lc.rstar))
+
+        tt = try
+            # Compute the transit time by finding where the x component of
+            # the impact parameter is equal to zero
+            # This assumes the body crosses the mid plane during the transit
+            find_transit_time(t0, ts.h, @views(ts.points[ib,it,:,:]./rstar))
+        catch e
+            # If no convergence, just use the supplied transit time
+            t0
+        end
+
+        # Get the impact parameter at the transit midpoint (computed above)
+        b0 = compute_impact_parameter(t0, tt, ts.h, @views(ts.points[ib,it,:,:]./rstar))
         if b0 > 1.0+lc.k[ib-1]; continue; end
 
         # Compute points of contact
         # If grazing transit, only two points
-        if (b0 + lc.k[ib-1]) > 1.0
-            tc = points_of_contact_2(t0, ts.h, @views(ts.points[ib,it,:,:]./lc.rstar), lc.k[ib-1])
+        if (b0 + lc.k[ib-1]) >= 1.0
+            tc = points_of_contact_2(t0, tt, ts.h, @views(ts.points[ib,it,:,:]./rstar), lc.k[ib-1])
         else
-            tc = points_of_contact_4(t0, ts.h, @views(ts.points[ib,it,:,:]./lc.rstar), lc.k[ib-1])
+            tc = points_of_contact_4(t0, tt, ts.h, @views(ts.points[ib,it,:,:]./rstar), lc.k[ib-1])
         end
 
         # Integrate lightcurve
@@ -104,6 +122,7 @@ end
 function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
     nc = length(tc) # Number of points of contact
     dt = lc.dt
+    rstar = lc.rstar[1]
 
     # Integrate over each Exposure
     for i in 1:lc.nobs
@@ -124,13 +143,13 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
         push!(tlim, tend)
 
         # Get series expansion components
-        xc = components(@views(ts.points[ib,it,:,1]./lc.rstar), ts.h)
-        yc = components(@views(ts.points[ib,it,:,2]./lc.rstar), ts.h)
+        xc = components(@views(ts.points[ib,it,:,1]./rstar), ts.h)
+        yc = components(@views(ts.points[ib,it,:,2]./rstar), ts.h)
 
         if lc.do_grad
             n_bodies = length(ts.count)
-            dxc = [components(ts.dpoints[ib,it,:,1,k,i]./lc.rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
-            dyc = [components(ts.dpoints[ib,it,:,2,k,i]./lc.rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
+            dxc = [components(ts.dpoints[ib,it,:,1,k,i]./rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
+            dyc = [components(ts.dpoints[ib,it,:,2,k,i]./rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
             # integrate over exposure
             for j in 1:length(tlim)-1
@@ -139,7 +158,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
                 lc.dfdq0[i,:] .+= ia.I_of_f[2:1+n_bodies*7]
                 lc.dfdk[i,:] .+= ia.I_of_f[2+n_bodies*7:n_bodies*8]
                 lc.dfdu[i,:] .+= trans.dgdu' * ia.I_of_f[end-trans.n-1:end-1]
-                lc.dfdr[i] += ia.I_of_f[end] / lc.rstar
+                lc.dfdr[i] += ia.I_of_f[end] / rstar
             end
         else
             # Integrate over exposure
