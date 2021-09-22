@@ -70,7 +70,7 @@ end
 function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, ProvidedTimes}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
 
     zero_out!(lc) # Zero out model arrays
-    ia = IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 1) : 1, maxdepth, tol)
+    ia = IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
 
     # Make transit structure (will be updated with proper r and b later)
     trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
@@ -122,7 +122,7 @@ end
 function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
     nc = length(tc) # Number of points of contact
     dt = lc.dt
-    rstar = lc.rstar[1]
+    inv_rstar = inv(lc.rstar[1])
 
     # Integrate over each Exposure
     for i in 1:lc.nobs
@@ -143,13 +143,13 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
         push!(tlim, tend)
 
         # Get series expansion components
-        xc = components(@views(ts.points[ib,it,:,1]./rstar), ts.h)
-        yc = components(@views(ts.points[ib,it,:,2]./rstar), ts.h)
+        xc = components(@views(ts.points[ib,it,:,1].*inv_rstar), ts.h)
+        yc = components(@views(ts.points[ib,it,:,2].*inv_rstar), ts.h)
 
         if lc.do_grad
             n_bodies = length(ts.count)
-            dxc = [components(ts.dpoints[ib,it,:,1,k,i]./rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
-            dyc = [components(ts.dpoints[ib,it,:,2,k,i]./rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
+            dxc = [components(ts.dpoints[ib,it,:,1,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
+            dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
             # integrate over exposure
             for j in 1:length(tlim)-1
@@ -158,7 +158,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
                 lc.dfdq0[i,:] .+= ia.I_of_f[2:1+n_bodies*7]
                 lc.dfdk[i,:] .+= ia.I_of_f[2+n_bodies*7:n_bodies*8]
                 lc.dfdu[i,:] .+= trans.dgdu' * ia.I_of_f[end-trans.n-1:end-1]
-                lc.dfdr[i] += ia.I_of_f[end] / rstar
+                lc.dfdr[i] += ia.I_of_f[end] * inv_rstar
             end
         else
             # Integrate over exposure
