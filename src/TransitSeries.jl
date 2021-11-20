@@ -77,8 +77,9 @@ Integrate to right before the first transit expansion point. Save state and
 integrate for 7 steps at h=ts.h. Revert to pre-transit state and continue to
 next transit.
 """
-function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes}; grad::Bool=false) where T<:Real
-    if grad; d = Derivatives(T, s.n); end
+function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes},d::Union{Derivatives,Nothing}=nothing; grad::Bool=false) where T<:Real
+    if grad && d == nothing; d = Derivatives(T, s.n); end
+    if ~grad && d !== nothing; grad = true; end
 
     # Run integrator and record sky positions for list of integration times
     nstep::Int64 = 0; t0 = s.t[1]
