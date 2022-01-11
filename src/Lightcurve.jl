@@ -29,7 +29,7 @@ struct Lightcurve{T<:Real}
         n_params > 0 ? do_grad = true : do_grad = false
         nobs = length(tobs)
         flux = zeros(T,nobs)
-        dtinv = inv(dt)
+        dtinv = dt == 0.0 ? 0.0 : inv(dt)
         dfdu = zeros(T, nobs, length(u_n))
         dfdk = zeros(T, nobs, length(k))
         dfdq0 = zeros(T, nobs, n_params)
@@ -47,6 +47,21 @@ function zero_out!(lc::Lightcurve{T}) where T<:Real
     lc.dfdr .= 0.0
     lc.flux .= 0.0
 end
+
+# Normalize the exposure integration by the exposure time.
+function normalize!(lc::Lightcurve{T}, ia::IntegralArrays{T}) where T<:Real
+    lc.flux .*= lc.dtinv # Divide by exposure time to get average flux
+    if lc.do_grad
+        # Do the same for derivatives
+        lc.dfdk .*= lc.dtinv
+        lc.dfdu .*= lc.dtinv
+        lc.dfdq0 .*= lc.dtinv
+        lc.dfdr .*= lc.dtinv
+    end
+end
+
+# If non-integrated exposure, do nothing
+@inline normalize!(lc::Lightcurve{T}, ia::T) where T<:Real = nothing
 
 function find_transit_time(t0::T, h::T, points::AbstractMatrix{T}) where T<:Real
     tt = find_zero(t->compute_impact_parameter(t, t0, h, points), t0)
@@ -70,7 +85,9 @@ end
 function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, ProvidedTimes}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
 
     zero_out!(lc) # Zero out model arrays
-    ia = IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
+
+    # Check if we're doing an integrated lightcurve
+    ia = lc.dt == 0.0 ? 0.0 : IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
 
     # Make transit structure (will be updated with proper r and b later)
     trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
@@ -108,14 +125,9 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, ProvidedTim
         trans.r = lc.k[ib-1]
         integrate_transit!(ib,it,t0,tc,trans,lc,ts,ia)
     end
-    lc.flux .*= lc.dtinv # Divide by exposure time to get average flux
-    if lc.do_grad
-        # Do the same for derivatives
-        lc.dfdk .*= lc.dtinv
-        lc.dfdu .*= lc.dtinv
-        lc.dfdq0 .*= lc.dtinv
-        lc.dfdr .*= lc.dtinv
-    end
+
+    # Normalize by exposure time, if needed.
+    normalize!(lc, ia)
     return
 end
 
@@ -171,6 +183,32 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
     return
 end
 
+function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::T) where {N, T<:Real}
+    inv_rstar = inv(lc.rstar[1])
+
+    # Compute the flux at each point
+    for i in 1:lc.nobs
+        # Check if observation is outside of a transit
+        if lc.tobs[i] > tc[end]; break; end
+        if lc.tobs[i] < tc[1]; continue; end
+
+        # Get series expansion components
+        xc = components(@views(ts.points[ib,it,:,1].*inv_rstar), ts.h)
+        yc = components(@views(ts.points[ib,it,:,2].*inv_rstar), ts.h)
+
+        if lc.do_grad
+            n_bodies = length(ts.count)
+            dxc = [components(ts.dpoints[ib,it,:,1,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
+            dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
+
+            compute_flux!(lc.tobs[i], t0, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rstar)
+        else
+            lc.flux[i] += compute_flux(lc.tobs[i], t0, xc, yc, trans)
+        end
+    end
+    return
+end
+
 function integrate_timestep!(t0::T, a::T, b::T, xc::SVector{N,T}, yc::SVector{N,T}, trans::Transit_Struct{T}, ia::IntegralArrays{T}) where {N, T<:Real}
     # Computes the flux as function of time.
     # Closure to be passed to integrator function
@@ -185,7 +223,14 @@ function integrate_timestep!(t0::T, a::T, b::T, xc::SVector{N,T}, yc::SVector{N,
     integrate_simpson!(a,b,transit_flux!,ia)
 end
 
-function integrate_timestep!(t0::T, a::T, b::T, xc, yc, dxc, dyc, trans, ia, dbdq0, ki) where T<:Real
+function compute_flux(tc::T, t0::T, xc::SVector{N,T}, yc::SVector{N,T}, trans::Transit_Struct{T}) where {N, T<:Real}
+    # Compute flux at a particular time
+    trans.b = compute_impact_parameter(tc, t0, xc, yc)
+    flux = transit_poly_g(trans) - 1
+    return flux
+end
+
+function integrate_timestep!(t0::T, a::T, b::T, xc::SVector{N,T}, yc::SVector{N,T}, dxc, dyc, trans::Transit_Struct{T}, ia, dbdq0, ki) where {N,T<:Real}
     n_coords = length(dbdq0)
 
     # Map radius ratio index to the gradient array index.
@@ -206,4 +251,15 @@ function integrate_timestep!(t0::T, a::T, b::T, xc, yc, dxc, dyc, trans, ia, dbd
 
     # Integrate flux and derivatives over exposure interval [a,b]
     integrate_simpson!(a,b,transit_flux_grad!,ia)
+end
+
+function compute_flux!(tc::T, t0::T, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rstar) where T<:Real
+    # Compute flux and derivatives
+    trans.b = compute_impact_parameter!(tc, t0, xc, yc, dxc, dyc, lc.dbdq0)
+    lc.flux[i] += transit_poly_g!(trans) - 1            # Flux
+    lc.dfdq0[i,:] .+= trans.dfdrb[2] .* lc.dbdq0        # Derivative wrt initial conditions
+    lc.dfdk[i,ki] += trans.dfdrb[1]                     # Radius ratio
+    lc.dfdu[i,:] .+= trans.dgdu' * trans.dfdg           # Limbdarkening params
+    lc.dfdr[i] += -trans.dfdrb[2]*trans.b*inv_rstar     # Stellar radius
+    return
 end
