@@ -75,13 +75,7 @@ function integrate_simpson!(a::T, b::T, f::Function, ia::IntegralArrays{T}) wher
         A[j,2] = h * (g[j,1] + 4 * g[j,2] + g[j,3])
         A[j,3] = h * (g[j,3] + 4 * g[j,4] + g[j,5])
     end
-    maxdiff = zero(T)
-    @inbounds for j = 1:nf
-        maxa231 = abs((A[j,2] + A[j,3]) - A[j,1])
-        if maxa231 > maxdiff
-            maxdiff = maxa231
-        end
-    end
+    maxdiff = abs((A[1,2] + A[1,3]) - A[1,1])
     if maxdiff > 3 * epsilon
         m *= 2
         n += 1
