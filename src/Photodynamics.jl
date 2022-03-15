@@ -6,7 +6,7 @@ using Reexport
 using StaticArrays, LinearAlgebra, Roots, SpecialFunctions, Limbdark
 
 import Limbdark: transit_poly_g, transit_poly_g!, Transit_Struct
-import NbodyGradient: InitialConditions, Derivatives, ElementsIC
+import NbodyGradient: InitialConditions, Derivatives, ElementsIC, TransitOutput
 import NbodyGradient: check_step, set_state!
 
 export dot, compute_lightcurve!

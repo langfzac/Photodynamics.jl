@@ -73,16 +73,16 @@ function points_of_contact_4(tt::T,t0::T,h::T,points::AbstractMatrix{T},k::T) wh
     t2 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), tt-h)
     t3 = find_zero(t -> (1.0-k-compute_impact_parameter(t,t0,h,points)), tt+h)
     t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt+h)
-    return SVector(t1,t2,t3,t4)
+    return SVector{4, T}(t1,t2,t3,t4)
 end
 
 function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) where T<:Real
     t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt-h)
     t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt+h)
-    return SVector(t1,t4)
+    return SVector{2, T}(t1,t4)
 end
 
-function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, ProvidedTimes}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
+function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6) where {T<:Real, TT<:AbstractTransitTimes}
 
     zero_out!(lc) # Zero out model arrays
 
@@ -99,26 +99,16 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, ProvidedTim
         t0 = ts.times[it]   # Get "data" transit time (expansion point)
         ib = ts.bodies[it]  # Get transiting body
 
-        tt = try
-            # Compute the transit time by finding where the x component of
-            # the impact parameter is equal to zero
-            # This assumes the body crosses the mid plane during the transit
-            find_transit_time(t0, ts.h, @views(ts.points[ib,it,:,:]./rstar))
-        catch e
-            # If no convergence, just use the supplied transit time
-            t0
-        end
-
         # Get the impact parameter at the transit midpoint (computed above)
-        b0 = compute_impact_parameter(t0, tt, ts.h, @views(ts.points[ib,it,:,:]./rstar))
+        b0 = compute_impact_parameter(t0, t0, ts.h, @views(ts.points[ib,it,:,:]./rstar))
         if b0 > 1.0+lc.k[ib-1]; continue; end
 
         # Compute points of contact
         # If grazing transit, only two points
         if (b0 + lc.k[ib-1]) >= 1.0
-            tc = points_of_contact_2(t0, tt, ts.h, @views(ts.points[ib,it,:,:]./rstar), lc.k[ib-1])
+            tc = points_of_contact_2(t0, t0, ts.h, @views(ts.points[ib,it,:,:]./rstar), lc.k[ib-1])
         else
-            tc = points_of_contact_4(t0, tt, ts.h, @views(ts.points[ib,it,:,:]./rstar), lc.k[ib-1])
+            tc = points_of_contact_4(t0, t0, ts.h, @views(ts.points[ib,it,:,:]./rstar), lc.k[ib-1])
         end
 
         # Integrate lightcurve
@@ -137,6 +127,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
     inv_rstar = inv(lc.rstar[1])
 
     # Integrate over each Exposure
+    # TO-DO: Only iterate over the times around the transit.
     for i in 1:lc.nobs
         tstart = lc.tobs[i] - 0.5*dt
         tend = lc.tobs[i] + 0.5*dt
