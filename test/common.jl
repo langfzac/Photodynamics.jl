@@ -6,6 +6,8 @@ import Photodynamics: IntegralArrays, integrate_simpson!
 import Photodynamics: integrate_timestep!, compute_flux, compute_flux!
 import Photodynamics: NbodyGradient.amatrix
 
+isapprox_maxabs(a,b) = isapprox(a, b, norm=x->maximum(abs.(x)))
+
 function setup_ICs(n, BJD::T, t0::T) where T<:Real
     elements = T.(readdlm("elements.txt", ',')[1:n,:])
     elements[2:end,3] .-= BJD # Shift initial transit times
@@ -30,6 +32,14 @@ function compute_transit_times(ic, intr; grad=false)
     tt = TransitTiming(intr.tmax, ic)
     intr(s, tt; grad=grad)
     return tt
+end
+
+function compute_pd(ic, intr; grad=false)
+    s = State(ic);
+    tt = TransitTiming(intr.tmax, ic);
+    pd = TransitSeries(intr.tmax, ic);
+    intr(s, pd, tt;grad=grad)
+    return pd
 end
 
 function compute_pd(ic, tt, intr; grad=false)

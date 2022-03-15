@@ -4,6 +4,12 @@ using Test
 include("common.jl")
 
 @testset "Photodynamics.jl" begin
+    print("Integration Methods... ")
+    @testset "Integration Methods" begin
+        include("test_transit_series.jl")
+    end
+    println("Done.")
+
     print("Impact Parameter... ")
     @testset "Impact Parameter" begin
         include("test_impact_parameter.jl")
