@@ -59,7 +59,9 @@ end
 function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<:Real
     ntt::Int64 = 0  # Total expected transits, assumes no transits <= ic.t0
     for P in ic.elements[:,2]
-        ntt += round(Int64, tmax/P)
+        if P > 0.0 # Allow for orbital elements to be 'out-of-order'
+            ntt += ceil(Int64, tmax/P) # Likely to have a buffer
+        end
     end
 
     times = zeros(T, ntt)
@@ -67,6 +69,7 @@ function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<
     intr_times = zeros(T,length(times))
     points = zeros(T,ic.nbody,ntt,7,2)
     dpoints = zeros(T,ic.nbody,ntt,7,2,ic.nbody,7)
+    count = zeros(Int64, ic.nbody)
     s_prior = State(ic)
     TransitSeries{T, ComputedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
@@ -104,32 +107,122 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes},d::U
         set_state!(ts.s_prior, s)
 
         # Now integrate to each expansion point with step ts.h
-        for k in 1:7
-
-            # Step to the first point if needed
-            k == 1 ? h_points = t-ts.s_prior.t[1] : h_points = ts.h
-
-            if grad
-                intr.scheme(s,d,h_points)
-            else
-                intr.scheme(s,h_points)
-            end
-
-            # record points for transiting body
-            ts.points[ibody,itime,k,1] = s.x[1,ibody]
-            ts.points[ibody,itime,k,2] = s.x[2,ibody]
-
-            if grad
-                # Get gradients of points wrt initial orbital elements and masses
-                # p body, q element
-                for p in 1:s.n, q in 1:7
-                    ts.dpoints[ibody,itime,k,1,p,q] = s.jac_step[(ibody-1)*7+1,(p-1)*7+q]
-                    ts.dpoints[ibody,itime,k,2,p,q] = s.jac_step[(ibody-1)*7+2,(p-1)*7+q]
-                end
-            end
+        if grad
+            compute_points!(s, ts, d, t, ts.s_prior.t[1], ts.h, ibody, itime, intr)
+        else
+            compute_points!(s, ts, t, ts.s_prior.t[1], ts.h, ibody, itime, intr)
         end
 
         # Return to state before transit
         set_state!(s, ts.s_prior)
+    end
+end
+
+function compute_points!(s, ts, t, t0, h, ibody, itime, intr)
+    for k in 1:7
+        # Step to the first point if needed
+        k == 1 ? h_points = t-t0 : h_points = h
+        intr.scheme(s, h_points)
+
+        # record points for transiting body
+        ts.points[ibody,itime,k,1] = s.x[1,ibody]
+        ts.points[ibody,itime,k,2] = s.x[2,ibody]
+    end
+    return
+end
+
+function compute_points!(s, ts, d, t, t0, h, ibody, itime, intr)
+    for k in 1:7
+        # Step to the first point if needed
+        k == 1 ? h_points = t-t0 : h_points = h
+        intr.scheme(s, d, h_points)
+
+        # record points for transiting body
+        ts.points[ibody,itime,k,1] = s.x[1,ibody]
+        ts.points[ibody,itime,k,2] = s.x[2,ibody]
+
+        # Get gradients of points wrt initial orbital elements and masses
+        # p body, q element
+        for p in 1:s.n, q in 1:7
+            ts.dpoints[ibody,itime,k,1,p,q] = s.jac_step[(ibody-1)*7+1,(p-1)*7+q]
+            ts.dpoints[ibody,itime,k,2,p,q] = s.jac_step[(ibody-1)*7+2,(p-1)*7+q]
+        end
+    end
+    return
+end
+
+"""Compute the transit times and 7 points about each.
+"""
+function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::TransitOutput{T},d::Union{Derivatives,Nothing}=nothing; grad::Bool=false) where T<:Real
+    if d isa Nothing; d = Derivatives(T, s.n); end
+
+    h = intr.h; t0 = s.t[1]
+    nsteps = abs(round(Int64, intr.tmax/intr.h))
+
+    for i in tt.occs
+        tt.gsave[i] = NbodyGradient.g!(i,tt.ti,s.x,s.v)
+    end
+
+    # Save initial state
+    set_state!(ts.s_prior, s)
+
+    for i in 1:nsteps
+        # Take a step with the integrator
+        if grad
+            intr.scheme(s,d,h)
+        else
+            intr.scheme(s,h)
+        end
+        s.t[1] = t0 + (i * h)
+
+        # Save the current number of transits and check if any new ones occured
+        prior_count = copy(tt.count)
+        NbodyGradient.detect_transits!(s,d,tt,intr,grad=grad)
+
+        # Check whether a transit did occur.
+        # If so, compute 7 points around transit time.
+        # This assumes the integration timestep is larger than the
+        # expansion resolution (ie. ts.dt).
+        count_mask = prior_count .< tt.count
+        ibodies = findall(count_mask) # Indices of bodies which transited
+
+        # Make sure the transit times are chronological
+        times = [tt.tt[i,j] for (i,j) in zip(ibodies, tt.count[ibodies])]
+        inds = sortperm(times)
+        ibodies = ibodies[inds]
+
+        # If theres more than one transit we need to revert the state for each
+        if length(ibodies) > 1; set_state!(tt.s_prior, ts.s_prior); end
+
+        for (j,ibody) in enumerate(ibodies)
+            # If more than one transit occured, reset state to pre-transit
+            if j > 1; set_state!(ts.s_prior, tt.s_prior); end
+
+            # Save time and body index to TransitSeries
+            itime = sum(tt.count) - (length(ibodies) - j)
+            ts.times[itime] = tt.tt[ibody, tt.count[ibody]]
+            ts.bodies[itime] = ibody
+
+            # Get the time of the first expansion point
+            t_current = ts.s_prior.t[1]
+            t_first = tt.tt[ibody, tt.count[ibody]] - 3*ts.h
+            h_first = ts.s_prior.t[1] - t_first  # Time step to first point
+            if h_first < 0; @warn "Integrating backwards"; end
+
+            if grad
+                compute_points!(ts.s_prior, ts, d, t_first, t_current, ts.h, ibody, itime, intr)
+            else
+                compute_points!(ts.s_prior, ts, t_first, t_current, ts.h, ibody, itime, intr)
+            end
+        end
+
+        # Set to current state
+        set_state!(ts.s_prior, s)
+    end
+
+    # Clean up arrays/remove buffer
+    while ts.bodies[end] == 0
+        pop!(ts.bodies)
+        pop!(ts.times)
     end
 end
