@@ -6,30 +6,33 @@ function test_impact_parameter_accuracy(n)
     ic = setup_ICs(n,BJD,t0_ic)
     intr = setup_integrator(ic, tmax)
     tt = compute_transit_times(ic, intr)
-    pd = compute_pd(ic, tt, intr)
+    pd_provided = compute_pd(ic, tt, intr)
+    pd_computed = compute_pd(ic, intr)
 
     # Normalize points to stellar radius
     rstar = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
-    normalize_points!(pd.points, rstar)
+    normalize_points!(pd_provided.points, rstar)
+    normalize_points!(pd_computed.points, rstar)
 
     # Get radius ratios
     k = get_radius_ratios_trappist(n)
 
-    for it in 1:length(pd.times)
+    # Test the provided times methods
+    for it in 1:length(pd_provided.times)
         # Compute the transit duration
-        ib = pd.bodies[it]
-        t0 = pd.times[it];
+        ib = pd_provided.bodies[it]
+        t0 = pd_provided.times[it];
         s = State(ic)
         els = NbodyGradient.get_orbital_elements(s, ic)
-        b0 = compute_impact_parameter(t0, t0, 2e-2, pd.points[ib,it,:,:])
+        b0 = compute_impact_parameter(t0, t0, 2e-2, pd_provided.points[ib,it,:,:])
         a = els[ib].a / rstar
 
         # Compute impact parameter over transit duration
         resolution = 0.0001
         bound = els[ib].P / pi * asin(sqrt((1 + k[ib - 1])^2 + b0^2) / (a * sin(els[ib].I))) / 2
-        tc = collect(pd.times[it] - bound:resolution:pd.times[it] + bound)
-        xc = components(@views(pd.points[ib,it,:,1]), 2e-2)
-        yc = components(@views(pd.points[ib,it,:,2]), 2e-2)
+        tc = collect(pd_provided.times[it] - bound:resolution:pd_provided.times[it] + bound)
+        xc = components(@views(pd_provided.points[ib,it,:,1]), 2e-2)
+        yc = components(@views(pd_provided.points[ib,it,:,2]), 2e-2)
         b_series = compute_impact_parameter.(tc, t0, Ref(xc), Ref(yc))
 
         # Now output the actual sky-separation from NbodyGradient
