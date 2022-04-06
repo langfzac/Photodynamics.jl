@@ -1,6 +1,51 @@
 using StaticArrays, LinearAlgebra, Photodynamics
 import Base: show
 
+## Based on implementations in https://github.com/tbreloff/ConcreteAbstractions.jl/blob/master/src/ConcreteAbstractions.jl
+## and https://www.stochasticlifestyle.com/type-dispatch-design-post-object-oriented-programming-julia/
+macro copyfields(typedef)
+    @assert typedef.head === :struct "Only to be used on type definitions"
+    mut, nameblock, args = typedef.args
+
+    # Pull out just the type name
+    # Removes any type annotations
+    while isdefined(nameblock, :head)
+        nameblock = nameblock.args[1]
+    end
+
+    # Make the name of the resulting 'add fields' macro
+    # Will me add_MyType_fields, without type parameters
+    macro_name = Symbol("add_", nameblock, "_fields")
+
+    # Remove any constructors
+    # Assumes standard placement of constructor and fields
+    fields = args.args
+    while true
+        println("Again")
+        if fields[end] isa Symbol; break; end # This should be a field
+        if ~(fields[end] isa Expr); pop!(fields); continue; end # This is likely a LineNumberNode or something
+        # Finally, if it's an expression, only remove if a function.
+        # Covers both standard and 'inline' constructors
+        if isdefined(fields[end], :head)
+            if all(fields[end].head .!== (:function,:(=)))
+                break
+            end
+            pop!(fields)
+        end
+    end
+
+    fields = Expr(:block, fields...)
+    return Expr(:block,
+    quote
+        esc($typedef)
+    end,
+    quote
+        macro $(esc(macro_name))()
+            esc($(Expr(:quote, fields)))
+        end
+    end, nothing)
+end
+
 # Define traits for differentiability
 abstract type Differentiability end
 struct Differentiable <: Differentiability end
@@ -28,7 +73,7 @@ struct ExpansionModel{ET, DT<:Differentiability, T<:Real} <: AbstractDynamicalMo
 end
 Differentiability(::ExpansionModel) = NonDifferentiable()
 
-"""Actually compute the expansion model for a set of nbody initial conditions"""
+"""Setup the dynamical model; Pre-compute the expansions"""
 function ExpansionModel(ic::InitialConditions{T}, tmax::T; h=zero(T)) where T<:Real
     # Compute the nbody model and output points
     s = State(ic)
@@ -38,18 +83,7 @@ function ExpansionModel(ic::InitialConditions{T}, tmax::T; h=zero(T)) where T<:R
     Integrator(h, tmax)(s, ts, tt, grad=false) ## Fix typing for gradient computation ##
 
     # Compute components for each transit
-    expType = PK20Expansion
-    expansions = sizehint!(expType{SVector{5, T}, T}[], length(ts.times))
-    for it in eachindex(ts.times)
-        t0 = ts.times[it]
-        ib = ts.bodies[it]
-
-        xc = components(@views(ts.points[ib,it,:,1]), ts.h)
-        yc = components(@views(ts.points[ib,it,:,2]), ts.h)
-
-        exp = expType(xc, yc, t0)
-        push!(expansions, exp)
-    end
+    expansions = compute_expansions(PK20Expansion, ts)
 
     return ExpansionModel(expansions, ts.times, ts.bodies)
 end
@@ -63,7 +97,7 @@ end
 ## Broadcast over the expansions inside of ExpansionModel
 Base.broadcastable(em::ExpansionModel) = em.expansions
 
-struct PK20Expansion{V<:AbstractVector, T<:Real} <: AbstractExpansion{T}
+@copyfields struct PK20Expansion{V<:AbstractVector, T<:Real} <: AbstractExpansion{T}
     xc::V # Components
     yc::V # ""
     t0::T # Expansion time
@@ -76,11 +110,12 @@ end
 Differentiability(::Type{<:PK20Expansion}) = NonDifferentiable()
 
 struct dPK20Expansion{V<:AbstractVector, VV<:AbstractVector, T<:Real} <: AbstractExpansion{T}
-    xc::V # Components
-    yc::V # ""
+    @add_PK20Expansion_fields
+    #xc::V # Components
+    #yc::V # ""
     dxc::VV # Derivatives (Will be vector of vectors)
     dyc::VV
-    t0::T # Expansion time
+    #t0::T # Expansion time
 
     function dPK20Expansion(
             xc::AbstractVector{T}, yc::AbstractVector{T},
@@ -93,6 +128,21 @@ struct dPK20Expansion{V<:AbstractVector, VV<:AbstractVector, T<:Real} <: Abstrac
     end
 end
 Differentiability(::Type{<:dPK20Expansion}) = Differentiable()
+
+function compute_expansions(::Type{PK20Expansion}, ts::TransitSeries{T}) where T<:Real
+    expansions = sizehint!(PK20Expansion{SVector{5, T}, T}[], length(ts.times))
+    for it in eachindex(ts.times)
+        t0 = ts.times[it]
+        ib = ts.bodies[it]
+
+        xc = components(@views(ts.points[ib,it,:,1]), ts.h)
+        yc = components(@views(ts.points[ib,it,:,2]), ts.h)
+
+        exp = PK20Expansion(xc, yc, t0)
+        push!(expansions, exp)
+    end
+    return expansions
+end
 
 function compute_impact_parameter(ex::PK20Expansion{V,T}, tc::T) where {V,T<:Real}
     t = tc - ex.t0
