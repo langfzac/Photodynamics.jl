@@ -21,7 +21,6 @@ macro copyfields(typedef)
     # Assumes standard placement of constructor and fields
     fields = args.args
     while true
-        println("Again")
         if fields[end] isa Symbol; break; end # This should be a field
         if ~(fields[end] isa Expr); pop!(fields); continue; end # This is likely a LineNumberNode or something
         # Finally, if it's an expression, only remove if a function.
