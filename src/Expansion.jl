@@ -1,49 +1,6 @@
-using StaticArrays, LinearAlgebra, Photodynamics
+#using StaticArrays, LinearAlgebra, Photodynamics
 import Base: show
-
-## Based on implementations in https://github.com/tbreloff/ConcreteAbstractions.jl/blob/master/src/ConcreteAbstractions.jl
-## and https://www.stochasticlifestyle.com/type-dispatch-design-post-object-oriented-programming-julia/
-macro copyfields(typedef)
-    @assert typedef.head === :struct "Only to be used on type definitions"
-    mut, nameblock, args = typedef.args
-
-    # Pull out just the type name
-    # Removes any type annotations
-    while isdefined(nameblock, :head)
-        nameblock = nameblock.args[1]
-    end
-
-    # Make the name of the resulting 'add fields' macro
-    # Will me add_MyType_fields, without type parameters
-    macro_name = Symbol("add_", nameblock, "_fields")
-
-    # Remove any constructors
-    # Assumes standard placement of constructor and fields
-    fields = args.args
-    while true
-        if fields[end] isa Symbol; break; end # This should be a field
-        if ~(fields[end] isa Expr); pop!(fields); continue; end # This is likely a LineNumberNode or something
-        # Finally, if it's an expression, only remove if a function.
-        # Covers both standard and 'inline' constructors
-        if isdefined(fields[end], :head)
-            if all(fields[end].head .!== (:function,:(=)))
-                break
-            end
-            pop!(fields)
-        end
-    end
-
-    fields = Expr(:block, fields...)
-    return Expr(:block,
-    quote
-        esc($typedef)
-    end,
-    quote
-        macro $(esc(macro_name))()
-            esc($(Expr(:quote, fields)))
-        end
-    end, nothing)
-end
+import Photodynamics: @copyfields
 
 # Define traits for differentiability
 abstract type Differentiability end
@@ -57,17 +14,47 @@ abstract type AbstractDynamicalModel end
 ## Types for Expansion based models (ie. PK20)
 abstract type AbstractExpansion{T} end
 
+struct ExpansionChain{ET<:AbstractExpansion, T<:Real}
+    expansions::Vector{ET}
+    body_index::Int64
+    times::Vector{T}
+
+    function ExpansionChain(expansions::AbstractVector{<:AbstractExpansion{T}}, body_index::Int) where T<:Real
+        times = [ex.t0 for ex in expansions]
+
+        ET = eltype(expansions)
+        return new{ET,T}(expansions, body_index, times)
+    end
+end
+
+Base.show(io::IO, ::MIME"text/plain", ec::ExpansionChain) = begin
+    println(io, "ExpansionChain")
+    print(io, "$(length(ec.expansions)) transits for body $(ec.body_index)")
+end
+
+Base.show(io::IO, ::MIME"text/plain", ecs::Vector{<:ExpansionChain}) = begin
+    print(io, "Vector{ExpansionChain}")
+    #print(io, "$(length(ec.expansions)) transits for body $(ec.body_index)")
+end
+
+get_expansion(chain::ExpansionChain, i) = chain.expansions[i]
+get_times(chain::ExpansionChain) = chain.times
+
 """Hold the different expansions needed to compute the impact parameter"""
 struct ExpansionModel{ET, DT<:Differentiability, T<:Real} <: AbstractDynamicalModel
-    expansions::ET
+    chains::ET
     times::Vector{T}
     bodies::Vector{Int64}
+    ic::InitialConditions{T}
 
-    function ExpansionModel(expansions::AbstractVector{<:AbstractExpansion{T}},
-                            times::Vector{T}, bodies::Vector{Int64}) where T<:Real
-        ET = typeof(expansions) # Nested vector types (maybe simplify this?)
-        DT = typeof(Differentiability(eltype(expansions))) # Every index should be the same type...
-        return new{ET, DT, T}(expansions, times, bodies)
+    function ExpansionModel(
+            chains::AbstractVector{<:ExpansionChain{<:AbstractExpansion{T}}},
+            times::Vector{T}, bodies::Vector{Int64},
+            ic::InitialConditions{T}) where T<:Real
+
+        ET = typeof(chains) # Nested vector types (maybe simplify this?)
+        DT = typeof(Differentiability(eltype(chains))) # Every index should be the same type...
+        return new{ET, DT, T}(chains, times, bodies, ic)
     end
 end
 Differentiability(::ExpansionModel) = NonDifferentiable()
@@ -82,9 +69,9 @@ function ExpansionModel(ic::InitialConditions{T}, tmax::T; h=zero(T)) where T<:R
     Integrator(h, tmax)(s, ts, tt, grad=false) ## Fix typing for gradient computation ##
 
     # Compute components for each transit
-    expansions = compute_expansions(PK20Expansion, ts)
+    expansions = compute_expansion_chains(PK20Expansion, ts)
 
-    return ExpansionModel(expansions, ts.times, ts.bodies)
+    return ExpansionModel(expansions, ts.times, ts.bodies, ic)
 end
 
 Base.show(io::IO, ::MIME"text/plain", em::ExpansionModel) = begin
@@ -94,7 +81,12 @@ Base.show(io::IO, ::MIME"text/plain", em::ExpansionModel) = begin
 end
 
 ## Broadcast over the expansions inside of ExpansionModel
-Base.broadcastable(em::ExpansionModel) = em.expansions
+Base.broadcastable(em::ExpansionModel) = em.chains
+
+## Accessor functions
+get_times(dyn::ExpansionModel) = dyn.times
+get_bodies(dyn::ExpansionModel) = dyn.bodies
+get_expansion(dyn::ExpansionModel, i, j) = dyn.chains[j-1].expansions[i]
 
 @copyfields struct PK20Expansion{V<:AbstractVector, T<:Real} <: AbstractExpansion{T}
     xc::V # Components
@@ -143,17 +135,45 @@ function compute_expansions(::Type{PK20Expansion}, ts::TransitSeries{T}) where T
     return expansions
 end
 
-function compute_impact_parameter(ex::PK20Expansion{V,T}, tc::T) where {V,T<:Real}
+function compute_expansion_chains(::Type{PK20Expansion}, ts::TransitSeries{T}) where T<:Real
+    expType = PK20Expansion{SVector{5, T}, T} # For type inference
+    nbody = maximum(ts.bodies) - 1 # Minus the star
+    expansion_chains = sizehint!(ExpansionChain{expType, T}[], nbody)
+    # Loop over each body and transit time
+    for ib in 2:nbody+1
+        expansions = sizehint!(expType[], length(ts.times))
+        for it in eachindex(ts.times)
+            t0 = ts.times[it]
+
+            xc = components(@views(ts.points[ib,it,:,1]), ts.h)
+            yc = components(@views(ts.points[ib,it,:,2]), ts.h)
+
+            # No transit of this body
+            if all(xc .== 0.0) && all(yc .== 0.0); continue; end
+
+            # Store in expansion type and push to vector
+            exp = PK20Expansion(xc, yc, t0)
+            push!(expansions, exp)
+        end
+        exp_chain = ExpansionChain(expansions, ib)
+        push!(expansion_chains, exp_chain)
+    end
+    return expansion_chains
+end
+
+
+function compute_sky_position(tc::T, ex::PK20Expansion{V,T}) where {V,T<:Real}
     t = tc - ex.t0
-    ts = SVector{5, T}(1.0,t,t*t,t*t*t,t*t*t*t)
+    ts = SVector{5, T}(1.0, t, t*t, t*t*t, t*t*t*t)
     lx = dot(ex.xc, ts)
     ly = dot(ex.yc, ts)
-    b = sqrt(lx*lx + ly*ly)
-    return b
+    return lx, ly
 end
-@inline compute_impact_parameter(ex::PK20Expansion{V, T}, tc::Real) where {V,T<:Real} = compute_impact_parameter(ex, T(tc))
 
-function compute_impact_parameter(ex::dPK20Expansion{V,VV,T}, tc::T) where {V,VV,T<:Real}
+@inline compute_impact_parameter(tc::T, ex::PK20Expansion{V,T}) where {V,T<:Real} = compute_impact_parameter(tc, ex.t0, ex.xc, ex.yc)
+@inline compute_impact_parameter(tc::Real, ex::PK20Expansion{V, T}) where {V,T<:Real} = compute_impact_parameter(T(tc), ex)
+
+function compute_impact_parameter(tc::T, ex::dPK20Expansion{V,VV,T}) where {V,VV,T<:Real}
     t = tc - ex.t0
     ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
     lx = dot(ex.xc, ts)
@@ -178,7 +198,7 @@ function compute_impact_parameter(em::ExpansionModel{ET, Differentiable, T}, tc:
     return bs, grads
 end
 
-function test_expansion()
+#=function test_expansion()
     # Get a set of Components assuming linear trajectory
     dt = 0.02
     v0 = 0.001
@@ -208,4 +228,4 @@ function test_expansion()
     return bs, grads
 end
 
-test_expansion()
+test_expansion()=#
