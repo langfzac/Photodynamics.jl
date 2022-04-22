@@ -12,9 +12,11 @@ import NbodyGradient: check_step, set_state!
 export dot, compute_lightcurve!
 export TransitSeries, Lightcurve
 
+include("utils.jl")
 include("simpson.jl")
 include("impact.jl")
 include("TransitSeries.jl")
+include("Expansion.jl")
 include("Lightcurve.jl")
 
 """Constant coefficients for the series expansion."""
