@@ -14,7 +14,7 @@ end
 """Compute the impact parameter at t=tc using a series expansion about t0."""
 function compute_impact_parameter(tc::T, t0::T, xc::AbstractVector{T}, yc::AbstractVector{T}) where T<:Real
     t = tc - t0
-    ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
+    ts = SVector{5, T}(1.0, t, t*t, t*t*t, t*t*t*t)
     lx = dot(xc, ts)
     ly = dot(yc, ts)
     return sqrt(lx*lx + ly*ly)
@@ -22,7 +22,7 @@ end
 
 function compute_impact_parameter(tc::T,t0::T,h::T,points::AbstractMatrix{T}) where T<:Real
     t = tc - t0
-    ts = SVector(1.0,t,t*t,t*t*t,t*t*t*t)
+    ts = SVector{5, T}(1.0,t,t*t,t*t*t,t*t*t*t)
     xc = components(points[:,1], h)
     yc = components(points[:,2], h)
     lx = dot(xc,ts)
@@ -32,7 +32,7 @@ end
 
 function compute_impact_parameter!(tc::T, t0::T, xc, yc, dxc, dyc, grad) where T<:Real
     t = tc - t0
-    ts = SVector(1.0, t, t*t, t*t*t, t*t*t*t)
+    ts = SVector{5, T}(1.0, t, t*t, t*t*t, t*t*t*t)
     lx = dot(xc, ts)
     ly = dot(yc, ts)
     b = sqrt(lx*lx + ly*ly)
