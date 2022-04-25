@@ -2,7 +2,7 @@
 function test_impact_parameter_accuracy(n)
     # Setup the simulation
     BJD = 7250.0; t0_ic = 7.0
-    tmax = 2.0
+    tmax = 15.0
     ic = setup_ICs(n,BJD,t0_ic)
     intr = setup_integrator(ic, tmax)
     tt = compute_transit_times(ic, intr)
@@ -40,7 +40,7 @@ function test_impact_parameter_accuracy(n)
         for (i, t) in enumerate(tc)
             s = State(ic)
             intr(s, t,;grad=false)
-            positions[i,:] .= s.x[1:2,ib] ./ rstar
+            positions[i,:] .= (s.x[1:2,ib] - s.x[1:2,1]) ./ rstar
         end
         b_actual = sqrt.(positions[:,1].^2 .+ positions[:,2].^2)
 

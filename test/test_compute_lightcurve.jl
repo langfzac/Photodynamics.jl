@@ -3,7 +3,7 @@
 @testset "Lightcurve" begin
     n = 8
     BJD = 7250.0; t0_ic = 7.0
-    tmax = 2.0
+    tmax = 15.0
     ic = setup_ICs(n, BJD, t0_ic);
     intr = setup_integrator(ic, tmax);
     tt = compute_transit_times(ic, intr);
