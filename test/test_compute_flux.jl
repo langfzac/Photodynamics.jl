@@ -4,7 +4,8 @@ function compute_timestep(params, t0, points, h, ib, it)
     xc = components(points[ib,it,:,1]./rstar, h)
     yc = components(points[ib,it,:,2]./rstar, h)
     trans = transit_init(params[ib - 1], zero(typeof(t0)), params[end - 2:end-1], false)
-    return compute_flux(t0, t0, xc, yc, trans)
+    dt = 2e-2
+    return compute_flux(t0+dt, t0, xc, yc, trans)
 end
 
 # Used in finite difference derivatives
@@ -25,7 +26,8 @@ function compute_timestep_nbody(coords, s_copy, tt, trans, ic, intr, it, ib)
     xc = components(pd.points[ib,it,:,1], pd.h)
     yc = components(pd.points[ib,it,:,2], pd.h)
 
-    return compute_flux(t0, t0, xc, yc, trans)
+    dt = 2e-2
+    return compute_flux(t0+dt, t0, xc, yc, trans)
 end
 
 function test_compute_timestep_derivatives(n)
@@ -55,10 +57,9 @@ function test_compute_timestep_derivatives(n)
         xc = components(pd.points[ib,it,:,1], pd.h)
         yc = components(pd.points[ib,it,:,2], pd.h)
 
-        # Compute the flux at t0
-        tol = 1e-15
-        maxdepth = 40
-        flux = compute_flux(t0, t0, xc, yc, trans)
+        # Compute the flux at t0+dt
+        dt = 2e-2
+        flux = compute_flux(t0+dt, t0, xc, yc, trans)
 
         # Make bigfloat variants
         ic_big = setup_ICs(n, big(BJD), big(t0_ic));
@@ -83,7 +84,7 @@ function test_compute_timestep_derivatives(n)
         trans_grad = transit_init(k[ki], 0.0, u_n, true)
         n_params = length(dbdq0) + length(k) + length(u_n) + 1 # flux
         lc = Lightcurve(0.0, [0.0], [0.0], [0.0], u_n, k, rstar, 7*(length(k)+1))
-        compute_flux!(t0, t0, xc, yc, dxc, dyc, lc, trans_grad, 1, ki, inv(rstar))
+        compute_flux!(t0+dt, t0, xc, yc, dxc, dyc, lc, trans_grad, 1, ki, inv(rstar))
 
         # Check flux again
         @test lc.flux[1] ≈ flux

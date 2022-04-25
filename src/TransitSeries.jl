@@ -15,7 +15,7 @@ struct TransitSeries{T<:Real, TT<:AbstractTransitTimes}
     ntt::Int64            # Total number of transits
     intr_times::Vector{T} # Times to integrate to anc compute points
     count::Vector{Int64}  # Number of transits for ith body
-    s_prior::State{T}
+    s_prior::Vector{State{T}}
 end
 
 """Pass a set of transit times"""
@@ -51,7 +51,7 @@ function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h::T=T(2e-2))
 
     points = zeros(T,ic.nbody,ntt,7,2)
     dpoints = zeros(T,ic.nbody,ntt,7,2,ic.nbody,7)
-    s_prior = State(ic)
+    s_prior = [State(ic)]
     TransitSeries{T, ProvidedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
 
@@ -70,7 +70,7 @@ function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<
     points = zeros(T,ic.nbody,ntt,7,2)
     dpoints = zeros(T,ic.nbody,ntt,7,2,ic.nbody,7)
     count = zeros(Int64, ic.nbody)
-    s_prior = State(ic)
+    s_prior = [State(ic) for _ in 1:5]
     TransitSeries{T, ComputedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
 
@@ -86,6 +86,7 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes},d::U
 
     # Run integrator and record sky positions for list of integration times
     nstep::Int64 = 0; t0 = s.t[1]
+    s_prior = ts.s_prior[1]
     for (itime,t) in enumerate(ts.intr_times)
         ibody = ts.bodies[itime]
 
@@ -104,17 +105,17 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes},d::U
         end
 
         # Save the pre-transit state
-        set_state!(ts.s_prior, s)
+        set_state!(s_prior, s)
 
         # Now integrate to each expansion point with step ts.h
         if grad
-            compute_points!(s, ts, d, t, ts.s_prior.t[1], ts.h, ibody, itime, intr)
+            compute_points!(s, ts, d, t, s_prior.t[1], ts.h, ibody, itime, intr)
         else
-            compute_points!(s, ts, t, ts.s_prior.t[1], ts.h, ibody, itime, intr)
+            compute_points!(s, ts, t, s_prior.t[1], ts.h, ibody, itime, intr)
         end
 
         # Return to state before transit
-        set_state!(s, ts.s_prior)
+        set_state!(s, s_prior)
     end
 end
 
@@ -125,8 +126,9 @@ function compute_points!(s, ts, t, t0, h, ibody, itime, intr)
         intr.scheme(s, h_points)
 
         # record points for transiting body
-        ts.points[ibody,itime,k,1] = s.x[1,ibody]
-        ts.points[ibody,itime,k,2] = s.x[2,ibody]
+        # Assumes transiting single star
+        ts.points[ibody,itime,k,1] = s.x[1,ibody] - s.x[1,1]
+        ts.points[ibody,itime,k,2] = s.x[2,ibody] - s.x[2,1]
     end
     return
 end
@@ -138,14 +140,15 @@ function compute_points!(s, ts, d, t, t0, h, ibody, itime, intr)
         intr.scheme(s, d, h_points)
 
         # record points for transiting body
-        ts.points[ibody,itime,k,1] = s.x[1,ibody]
-        ts.points[ibody,itime,k,2] = s.x[2,ibody]
+        # Assumes transiting single star
+        ts.points[ibody,itime,k,1] = s.x[1,ibody] - s.x[1,1]
+        ts.points[ibody,itime,k,2] = s.x[2,ibody] - s.x[2,1]
 
         # Get gradients of points wrt initial orbital elements and masses
         # p body, q element
         for p in 1:s.n, q in 1:7
-            ts.dpoints[ibody,itime,k,1,p,q] = s.jac_step[(ibody-1)*7+1,(p-1)*7+q]
-            ts.dpoints[ibody,itime,k,2,p,q] = s.jac_step[(ibody-1)*7+2,(p-1)*7+q]
+            ts.dpoints[ibody,itime,k,1,p,q] = s.jac_step[(ibody-1)*7+1,(p-1)*7+q] - s.jac_step[1, (p-1)*7+q]
+            ts.dpoints[ibody,itime,k,2,p,q] = s.jac_step[(ibody-1)*7+2,(p-1)*7+q] - s.jac_step[2, (p-1)*7+q]
         end
     end
     return
@@ -155,16 +158,21 @@ end
 """
 function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::TransitOutput{T},d::Union{Derivatives,Nothing}=nothing; grad::Bool=false) where T<:Real
     if d isa Nothing; d = Derivatives(T, s.n); end
+    nstates = length(ts.s_prior)
 
     h = intr.h; t0 = s.t[1]
     nsteps = abs(round(Int64, intr.tmax/intr.h))
 
+    # Save the sky-acceleration at the initial conditions
     for i in tt.occs
         tt.gsave[i] = NbodyGradient.g!(i,tt.ti,s.x,s.v)
     end
 
-    # Save initial state
-    set_state!(ts.s_prior, s)
+    # Save initial state to each element of vector
+    set_state!.(ts.s_prior, Ref(s))
+
+    # Set a counter for which state in s_prior is nstates steps before
+    state_counter = (1,1)  # (current state, furthest state)
 
     for i in 1:nsteps
         # Take a step with the integrator
@@ -187,16 +195,21 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         ibodies = findall(count_mask) # Indices of bodies which transited
 
         # Make sure the transit times are chronological
-        times = [tt.tt[i,j] for (i,j) in zip(ibodies, tt.count[ibodies])]
+        times = @SVector T[]
+        for (i,j) in zip(ibodies, @view(tt.count[ibodies]))
+            times = push(times, tt.tt[i,j])
+        end
         inds = sortperm(times)
         ibodies = ibodies[inds]
 
         # If theres more than one transit we need to revert the state for each
-        if length(ibodies) > 1; set_state!(tt.s_prior, ts.s_prior); end
+        s_points = ts.s_prior[last(state_counter)]
+        if length(ibodies) > 1; set_state!(tt.s_prior, s_points); end
 
+        # Loop over each transit and compute expansion points
         for (j,ibody) in enumerate(ibodies)
             # If more than one transit occured, reset state to pre-transit
-            if j > 1; set_state!(ts.s_prior, tt.s_prior); end
+            if j > 1; set_state!(s_points, tt.s_prior); end
 
             # Save time and body index to TransitSeries
             itime = sum(tt.count) - (length(ibodies) - j)
@@ -204,20 +217,42 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
             ts.bodies[itime] = ibody
 
             # Get the time of the first expansion point
-            t_current = ts.s_prior.t[1]
-            t_first = tt.tt[ibody, tt.count[ibody]] - 3*ts.h
-            h_first = ts.s_prior.t[1] - t_first  # Time step to first point
-            if h_first < 0; @warn "Integrating backwards"; end
+            t_first = ts.times[itime] - 3*ts.h
+
+            nstep = 0; t0_points = s_points.t[1]
+            while s_points.t[1] < t_first
+                t_current = s_points.t[1]
+                # Break if we will pass the point on this step
+                if t_first - t_current < h; break; end
+
+                if grad
+                    intr.scheme(s_points, d, h)
+                else
+                    intr.scheme(s_points, h)
+                end
+                nstep += 1
+                s_points.t[1] = t0_points + (nstep * h)
+            end
+
+            # Save the pre-point state
+            set_state!(tt.s_prior, s_points)
 
             if grad
-                compute_points!(ts.s_prior, ts, d, t_first, t_current, ts.h, ibody, itime, intr)
+                compute_points!(s_points, ts, d, t_first, s_points.t[1], ts.h, ibody, itime, intr)
             else
-                compute_points!(ts.s_prior, ts, t_first, t_current, ts.h, ibody, itime, intr)
+                compute_points!(s_points, ts, t_first, s_points.t[1], ts.h, ibody, itime, intr)
             end
         end
 
-        # Set to current state
-        set_state!(ts.s_prior, s)
+        # Shift counter by 1 and wrap at nstates
+        state_counter = (
+            mod1(first(state_counter) + 1, nstates),
+            i < nstates ? 1 : mod1(i+2, nstates)
+        )
+
+        # reset/set to current state
+        set_state!(s_points, tt.s_prior)
+        set_state!(ts.s_prior[first(state_counter)], s)
     end
 
     # Clean up arrays/remove buffer
