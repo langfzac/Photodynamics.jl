@@ -55,6 +55,13 @@ function compute_pd(s, ic, tt, intr; grad=false)
     return pd
 end
 
+function compute_sp(ic, times, intr; grad=false)
+    s = State(ic)
+    sp = SkyPositions(times, ic);
+    intr(s, sp; grad=grad)
+    return sp
+end
+
 function get_radius_ratios_trappist(n)
     depth = [0.7277,0.6940,0.3566,0.4802,0.634,0.764,0.346] .* 0.01
     return sqrt.(depth)[1:n-1]
