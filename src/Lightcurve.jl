@@ -39,6 +39,8 @@ struct Lightcurve{T<:Real}
     end
 end
 
+Lightcurve(tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}, rstar::T, n_params::Int64=0) where T<:Real = Lightcurve(zero(T), tobs, fobs, eobs, u_n, k, rstar, n_params)
+
 """Zero out the model arrays"""
 function zero_out!(lc::Lightcurve{T}) where T<:Real
     lc.dfdu .= 0.0
@@ -80,6 +82,26 @@ function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) wh
     t1 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt-h)
     t4 = find_zero(t -> (1.0+k-compute_impact_parameter(t,t0,h,points)), tt+h)
     return SVector{2, T}(t1,t4)
+end
+
+function compute_lightcurve!(lc::Lightcurve{T}, sp::SkyPositions{T}; tol::T=1e-6, maxdepth::Int64=6) where T<:Real
+    zero_out!(lc) # Zero out model arrays
+
+    # Make transit structure (will be updated with proper r and b later)
+    trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
+
+    # Iterate over each exposure and sum lightcurve
+    rstar = lc.rstar[1]
+    for it in eachindex(sp.times)
+        for ib in 2:length(lc.k)+1  # Don't need star
+            x,y,z = sp.points[it,:,ib]
+            if z > 0; continue; end  # Don't compute if behind star
+            trans.r = lc.k[ib-1]
+            trans.b = sqrt(x*x + y*y) / rstar
+            lc.flux[it] += transit_poly_g(trans) - 1
+        end
+    end
+    return
 end
 
 function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6) where {T<:Real, TT<:AbstractTransitTimes}
