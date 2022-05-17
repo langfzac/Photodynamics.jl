@@ -21,6 +21,7 @@ include("common.jl")
         include("test_simpson.jl")
         include("test_integrate_timestep.jl")
         include("test_compute_flux.jl")
+        include("test_lightcurve.jl")
         include("test_compute_lightcurve.jl")
     end
 end
