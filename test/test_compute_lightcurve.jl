@@ -13,7 +13,7 @@
 
     # Transit parameters
     k = get_radius_ratios_trappist(n);
-    u_n = get_limdark_coeffs_trappist();
+    u_n = get_limbdark_coeffs_trappist();
     rstar = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
 
     # Simulate lightcurve

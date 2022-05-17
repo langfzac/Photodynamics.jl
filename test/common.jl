@@ -60,9 +60,11 @@ function get_radius_ratios_trappist(n)
     return sqrt.(depth)[1:n-1]
 end
 
-function get_limdark_coeffs_trappist()
+function get_limbdark_coeffs_trappist()
     q = [0.11235270319764341, 0.42037661035916857]#, 0.352424321959808, 0.2864053200404355]
     return [2*sqrt(q[1])*q[2],2*sqrt(q[1])*(1-2q[2])]
 end
+
+get_trappist_rstar() = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
 
 normalize_points!(points, rstar) = points./=rstar

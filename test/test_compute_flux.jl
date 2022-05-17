@@ -35,7 +35,7 @@ function test_compute_timestep_derivatives(n)
     BJD = 7250.0; t0_ic = 7.0
     tmax = 2.0
     k = get_radius_ratios_trappist(n);
-    u_n = get_limdark_coeffs_trappist();
+    u_n = get_limbdark_coeffs_trappist();
     ic = setup_ICs(n, BJD, t0_ic);
     intr = setup_integrator(ic, tmax);
     tt = compute_transit_times(ic, intr);
