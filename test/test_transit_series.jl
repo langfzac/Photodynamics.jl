@@ -13,6 +13,7 @@ function test_integrator_methods(n)
     @test pd_provided.times == pd_computed.times[1:t_range]
     @test pd_provided.bodies == pd_computed.bodies[1:t_range]
     @test pd_provided.points ≈ pd_computed.points[:,1:t_range,:,:]
+    @test pd_provided.dpoints ≈ pd_computed.dpoints[:,1:t_range,:,:,:,:]
 
     # Make sure there's no extra computed points
     @test all(pd_computed.points[:,t_range+1:end,:,:] .== 0.0)
