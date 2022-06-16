@@ -43,20 +43,25 @@
     lc_c = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
     compute_lightcurve!(lc_p, pd_provided, tol=1e-11, maxdepth=40)
     compute_lightcurve!(lc_c, pd_computed, tol=1e-11, maxdepth=40)
+    haskey(ENV, "CI") ? println("\nProvided - Computed: ", maximum(abs.(lc_p.flux .- lc_c.flux))) : nothing
     @test isapprox_maxabs(lc_p.flux, lc_c.flux)
 
     dlc_p = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
     dlc_c = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
     compute_lightcurve!(dlc_p, pd_provided, tol=1e-11, maxdepth=40)
     compute_lightcurve!(dlc_c, pd_computed, tol=1e-11, maxdepth=40)
+    haskey(ENV, "CI") ? println("dProvided - dComputed: ", maximum(abs.(dlc_p.flux .- dlc_c.flux))) : nothing
     @test isapprox_maxabs(dlc_p.flux, dlc_c.flux)
 
+    haskey(ENV, "CI") ? println("dProvided - Provided: ", maximum(abs.(dlc_p.flux .- lc_p.flux))) : nothing
     @test isapprox_maxabs(dlc_p.flux, lc_p.flux)
+    haskey(ENV, "CI") ? println("dComputed - Computed: ", maximum(abs.(dlc_c.flux .- lc_c.flux))) : nothing
     @test isapprox_maxabs(dlc_c.flux, lc_c.flux)
 
     lc_noint = Lightcurve(0.0, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
     dlc_noint = Lightcurve(0.0, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
     compute_lightcurve!(lc_noint, pd_computed, tol=1e-11, maxdepth=40)
     compute_lightcurve!(dlc_noint, pd_computed, tol=1e-11, maxdepth=40)
+    haskey(ENV, "CI") ? println("dnoint - noint: ", maximum(abs.(dlc_noint.flux .- lc_noint.flux))) : nothing
     @test isapprox_maxabs(dlc_noint.flux, lc_noint.flux)
 end
