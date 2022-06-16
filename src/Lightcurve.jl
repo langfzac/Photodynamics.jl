@@ -93,10 +93,10 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
     zero_out!(lc) # Zero out model arrays
 
     # Check if we're doing an integrated lightcurve
-    ia = lc.dt == 0.0 ? 0.0 : IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
+    ia = lc.dt == 0.0 ? zero(T) : IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
 
     # Make transit structure (will be updated with proper r and b later)
-    trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
+    trans = transit_init(lc.k[1], zero(T), lc.u_n, lc.do_grad)
 
     # Iterate over each transit time and sum Lightcurve
     rstar = lc.rstar[1]
@@ -104,6 +104,7 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
         # check for transit
         t0 = ts.times[it]   # Get "data" transit time (expansion point)
         ib = ts.bodies[it]  # Get transiting body
+        if ib == 0; break; end  # Break if we've reached the end of the transits
 
         # Get the impact parameter at the transit midpoint (computed above)
         b0 = compute_impact_parameter(t0, t0, ts.h, @views(ts.points[ib,it,:,:]./rstar))
