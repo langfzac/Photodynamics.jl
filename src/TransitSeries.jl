@@ -187,6 +187,13 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         prior_count = copy(tt.count)
         NbodyGradient.detect_transits!(s,d,tt,intr,grad=grad)
 
+        # Break if we've exceeded the transit array
+        # This should only happen during parameter inference.
+        if any(size(tt.tt)[2] .< tt.count)
+            @warn "Exceeded transit times array: tt.tt"
+            break
+        end
+
         # Check whether a transit did occur.
         # If so, compute 7 points around transit time.
         # This assumes the integration timestep is larger than the
@@ -213,6 +220,14 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
 
             # Save time and body index to TransitSeries
             itime = sum(tt.count) - (length(ibodies) - j)
+
+            # Break if we've run out of room in array
+            # Should only happen during parameter inference.
+            if itime > length(ts.times);
+                @warn "Exceeded times array: ts.times"
+                break
+            end
+
             ts.times[itime] = tt.tt[ibody, tt.count[ibody]]
             ts.bodies[itime] = ibody
 
@@ -253,11 +268,5 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         # reset/set to current state
         set_state!(s_points, tt.s_prior)
         set_state!(ts.s_prior[first(state_counter)], s)
-    end
-
-    # Clean up arrays/remove buffer
-    while ts.bodies[end] == 0
-        pop!(ts.bodies)
-        pop!(ts.times)
     end
 end
