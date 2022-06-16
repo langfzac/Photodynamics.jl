@@ -198,7 +198,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             dxc = [components(ts.dpoints[ib,it,:,1,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
             dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
-            compute_flux!(lc.tobs[i], t0, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rstar)
+            compute_flux!(lc.tobs[i], t0, xc, yc, dxc, dyc, lc, trans, i, ib-1, inv_rstar)
         else
             lc.flux[i] += compute_flux(lc.tobs[i], t0, xc, yc, trans)
         end
