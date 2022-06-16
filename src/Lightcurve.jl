@@ -35,8 +35,14 @@ struct Lightcurve{T<:Real}
         dfdq0 = zeros(T, nobs, n_params)
         dbdq0 = zeros(T, n_params)
         dfdr = zeros(T, nobs)
-        return new{T}(dt,tobs,fobs,eobs,nobs,flux,dfdu,dfdk,dfdq0,dfdr,u_n,k,[rstar],dtinv,dbdq0,n_params,do_grad)
+        return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,dfdu,dfdk,dfdq0,dfdr,copy(u_n),copy(k),[rstar],dtinv,dbdq0,n_params,do_grad)
     end
+end
+
+"""Setup Lightcurve without having data"""
+function Lightcurve(dt::T, duration::T, u_n::Vector{T}, k::Vector{T}, rstar::T, n_params::Int64=0) where T<:Real
+    tobs = collect(0.0:dt:duration)
+    return Lightcurve(dt, tobs, zeros(T, size(tobs)), zeros(T,size(tobs)), u_n, k, rstar, n_params)
 end
 
 """Zero out the model arrays"""
@@ -192,7 +198,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             dxc = [components(ts.dpoints[ib,it,:,1,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
             dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
-            compute_flux!(lc.tobs[i], t0, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rstar)
+            compute_flux!(lc.tobs[i], t0, xc, yc, dxc, dyc, lc, trans, i, ib-1, inv_rstar)
         else
             lc.flux[i] += compute_flux(lc.tobs[i], t0, xc, yc, trans)
         end
