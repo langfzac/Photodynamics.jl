@@ -6,7 +6,23 @@ import Photodynamics: IntegralArrays, integrate_simpson!
 import Photodynamics: integrate_timestep!, compute_flux, compute_flux!
 import Photodynamics: NbodyGradient.amatrix
 
-isapprox_maxabs(a,b) = isapprox(a, b, norm=x->maximum(abs.(x)))
+function isapprox_maxabs(a,b; kwargs...)
+    isap = isapprox(a, b; norm=x->maximum(abs.(x)), kwargs...)
+    if ~isap 
+        @warn maximum(@.(abs(a-b)))
+    end
+    return isap
+end
+
+function get_test_assertion(s)
+    # Direct error message testing only in >1.8
+    # Otherwise just make sure the assertion works
+    if VERSION >= v"1.8"
+        return s
+    else
+        return AssertionError
+    end
+end
 
 function setup_ICs(n, BJD::T, t0::T) where T<:Real
     elements = T.(readdlm("elements.txt", ',')[1:n,:])
