@@ -214,6 +214,7 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         if length(ibodies) > 1; set_state!(tt.s_prior, s_points); end
 
         # Loop over each transit and compute expansion points
+        break_out = false
         for (j,ibody) in enumerate(ibodies)
             # If more than one transit occured, reset state to pre-transit
             if j > 1; set_state!(s_points, tt.s_prior); end
@@ -225,6 +226,7 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
             # Should only happen during parameter inference.
             if itime > length(ts.times);
                 @warn "Exceeded times array: ts.times"
+                break_out = true
                 break
             end
 
@@ -258,6 +260,7 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
                 compute_points!(s_points, ts, t_first, s_points.t[1], ts.h, ibody, itime, intr)
             end
         end
+        break_out && break
 
         # Shift counter by 1 and wrap at nstates
         state_counter = (
