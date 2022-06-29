@@ -17,7 +17,7 @@ struct Lightcurve{T<:Real}
     k::Vector{T}     # radius ratios
     rstar::Vector{T} # Stellar radius
 
-    # Interal arrays/values
+    # Integral arrays/values
     dtinv::T          # Inverse of the exposure time
     dbdq0::Vector{T}  # derivative of the impact parameter wrt the Nbody initial conditions
     n_params::Int64   # Number of nbody model parameters
