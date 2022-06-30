@@ -50,6 +50,13 @@ function compute_transit_times(ic, intr; grad=false)
     return tt
 end
 
+function compute_pd(s::State, ic::InitialConditions, intr::Integrator; grad=false)
+    tt = TransitTiming(intr.tmax, ic)
+    pd = TransitSeries(intr.tmax, ic)
+    intr(s, pd, tt; grad=grad)
+    return pd
+end
+
 function compute_pd(ic, intr; grad=false)
     s = State(ic);
     tt = TransitTiming(intr.tmax, ic);
@@ -84,3 +91,5 @@ end
 get_trappist_rstar() = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
 
 normalize_points!(points, rstar) = points./=rstar
+
+compute_transit_duration(b0, P, k, a, inc) = P / π * asin(sqrt((1+k)^2 + b0^2) / (a*sin(inc)))
