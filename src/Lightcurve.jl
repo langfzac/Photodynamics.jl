@@ -88,7 +88,7 @@ function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) wh
     return SVector{2, T}(t1,t4)
 end
 
-function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6) where {T<:Real, TT<:AbstractTransitTimes}
+function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6, body_index::Int64=0) where {T<:Real, TT<:AbstractTransitTimes}
 
     zero_out!(lc) # Zero out model arrays
 
@@ -105,6 +105,10 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
         t0 = ts.times[it]   # Get "data" transit time (expansion point)
         ib = ts.bodies[it]  # Get transiting body
         if ib == 0; break; end  # Break if we've reached the end of the transits
+
+        # Check whether we're computing flux for only a single body
+        # If we are, skip all other body indices.
+        if body_index != 0 && body_index != ib; continue; end
 
         # Get the impact parameter at the transit midpoint (computed above)
         b0 = compute_impact_parameter(t0, t0, ts.h, @views(ts.points[ib,it,:,:]./rstar))
