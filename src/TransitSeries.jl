@@ -282,4 +282,5 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         set_state!(s_points, tt.s_prior)
         set_state!(ts.s_prior[first(state_counter)], s)
     end
+    ts.count .= tt.count
 end
