@@ -74,6 +74,16 @@ function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<
     TransitSeries{T, ComputedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
 
+function zero_out!(ts::TransitSeries{T,TT}) where {T<:Real,TT}
+    for i in eachindex(fieldnames(TransitSeries))
+        if typeof(getfield(ts, i)) <: Array{T}
+            getfield(ts, i) .= zero(T)
+        end
+    end
+    ts.count .= zero(T)
+    return
+end
+
 """Compute 7 points about each transit time.
 
 Integrate to right before the first transit expansion point. Save state and
