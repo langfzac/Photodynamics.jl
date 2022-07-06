@@ -11,6 +11,7 @@ import NbodyGradient: check_step, set_state!
 
 export dot, compute_lightcurve!
 export TransitSeries, Lightcurve
+export transform_to_elements!
 
 include("simpson.jl")
 include("impact.jl")
