@@ -11,6 +11,7 @@ struct Lightcurve{T<:Real}
     dfdk::Matrix{T}   # Derivatives wrt the radius ratios
     dfdq0::Matrix{T}  # Derivatives wrt initial Nbody Cartesian coordinates and masses
     dfdr::Vector{T}   # Derivatives wrt stellar radius
+    dfdelements::Matrix{T}
 
     # Transit parameters
     u_n::Vector{T}   # Limbdark coefficients
@@ -35,7 +36,8 @@ struct Lightcurve{T<:Real}
         dfdq0 = zeros(T, nobs, n_params)
         dbdq0 = zeros(T, n_params)
         dfdr = zeros(T, nobs)
-        return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,dfdu,dfdk,dfdq0,dfdr,copy(u_n),copy(k),[rstar],dtinv,dbdq0,n_params,do_grad)
+        dfdelements = zeros(T, nobs, n_params)
+        return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,dfdu,dfdk,dfdq0,dfdr,dfdelements,copy(u_n),copy(k),[rstar],dtinv,dbdq0,n_params,do_grad)
     end
 end
 
@@ -265,3 +267,9 @@ function compute_flux!(tc::T, t0::T, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rst
     lc.dfdr[i] += -trans.dfdrb[2]*trans.b*inv_rstar     # Stellar radius
     return
 end
+
+"""
+Transform the jacobian wrt the initial Cartesian coordinates to initial orbital
+elements.
+"""
+transform_to_elements!(s::State{T}, lc::Lightcurve{T}) where T<:Real = mul!(lc.dfdelements, lc.dfdq0, s.jac_init);
