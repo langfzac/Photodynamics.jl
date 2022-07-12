@@ -24,8 +24,8 @@ function get_test_assertion(s)
     end
 end
 
-function setup_ICs(n, BJD::T, t0::T) where T<:Real
-    elements = T.(readdlm("elements.txt", ',')[1:n,:])
+function setup_ICs(n, BJD::T, t0::T; fname="elements.txt") where T<:Real
+    elements = T.(readdlm(fname, ',')[1:n,:])
     elements[2:end,3] .-= BJD # Shift initial transit times
     ic = ElementsIC(t0, n, elements)
     return ic
