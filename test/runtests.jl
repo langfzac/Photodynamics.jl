@@ -24,4 +24,9 @@ include("common.jl")
         include("test_lightcurve.jl")
         include("test_compute_lightcurve.jl")
     end
+
+    print("Breaking Cases...")
+    @testset "Breaking Cases" begin
+        include("test_warn.jl")
+    end
 end

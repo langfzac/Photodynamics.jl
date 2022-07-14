@@ -29,7 +29,7 @@ function test_impact_parameter_accuracy(n)
 
         # Compute impact parameter over transit duration
         resolution = 0.0001
-        bound = els[ib].P / pi * asin(sqrt((1 + k[ib - 1])^2 + b0^2) / (a * sin(els[ib].I))) / 2
+        bound = compute_transit_duration(b0, els[ib].P, k[ib-1], a, els[ib].I) / 2
         tc = collect(pd_provided.times[it] - bound:resolution:pd_provided.times[it] + bound)
         xc = components(@views(pd_provided.points[ib,it,:,1]), 2e-2)
         yc = components(@views(pd_provided.points[ib,it,:,2]), 2e-2)
@@ -60,18 +60,25 @@ function test_impact_parameter_derivatives(n)
     tt = compute_transit_times(ic, intr)
     pd = compute_pd(ic, tt, intr, grad=true)
 
+    k = get_radius_ratios_trappist(n)
+    rstar = get_trappist_rstar()
+    normalize_points!(pd.points, rstar)
+    normalize_points!(pd.dpoints, rstar)
+
     # Now run BigFloat precision simulations
     ic_copy = setup_ICs(n, big(BJD), big(t0_ic))
     intr_copy = setup_integrator(ic_copy, big(tmax))
     s_copy = State(ic_copy)
     tt_copy = compute_transit_times(ic_copy, intr_copy)
+    pd_copy = TransitSeries(intr_copy.tmax, ic_copy)
+    d_copy = NbodyGradient.Derivatives(BigFloat, ic_copy.nbody)
 
     # Compute the impact parameter
     # Used in finite difference derivatives
-    function compute_b(coords, s_copy, tt, intr, ic, it)
+    function compute_b(coords, pd, tt, d, intr, ic, it, tc::Union{<:Real, Nothing}=nothing)
         T = eltype(coords)
         h::T = 2e-2
-        s = deepcopy(s_copy)
+        s = State(ic)
         coords = reshape(coords, 7, n)
         for (i, col) in enumerate(eachcol(coords))
             s.x[:,i] .= col[1:3]
@@ -79,20 +86,24 @@ function test_impact_parameter_derivatives(n)
             s.m[i]    = col[end]
         end
 
-        pd = compute_pd(s, deepcopy(ic), deepcopy(tt), intr, grad=false)
+        Photodynamics.zero_out!(pd)
+        NbodyGradient.zero_out!(tt)
+        intr(s, pd, tt, d; grad=false)
+        #pd = compute_pd(s, ic, intr, grad=false)
 
         ib = pd.bodies[it]
         t0 = pd.times[it]
+        tc isa Nothing ? tc = t0 : nothing
         points = pd.points[ib,it,:,:]
         xc = components(points[:,1], h)
         yc = components(points[:,2], h)
-        return compute_impact_parameter(t0, t0, xc, yc)
+        return compute_impact_parameter(tc, t0, xc, yc)
     end
 
     # Compute the impact parameter and analytic gradient
-    function compute_grad_b(coords, s_copy, tt, intr, ic, it)
+    function compute_grad_b(coords, intr, ic, it, tc::Union{<:Real, Nothing}=nothing)
         h = 2e-2
-        s = deepcopy(s_copy)
+        s = State(ic)
         coords = reshape(coords, 7, n)
         for (i, col) in enumerate(eachcol(coords))
             s.x[:,i] .= col[1:3]
@@ -100,10 +111,11 @@ function test_impact_parameter_derivatives(n)
             s.m[i]    = col[end]
         end
 
-        pd = compute_pd(s, deepcopy(ic), deepcopy(tt), intr, grad=true)
+        pd = compute_pd(s, ic, intr, grad=true)
 
         ib = pd.bodies[it]
         t0 = pd.times[it]
+        tc isa Nothing ? tc = t0 : nothing
         points = pd.points[ib,it,:,:]
         xc = components(points[:,1], h)
         yc = components(points[:,2], h)
@@ -112,17 +124,29 @@ function test_impact_parameter_derivatives(n)
         inds = [1,2,3,4,5,6,7]
         dxc = [components(pd.dpoints[ib,it,:,1,k,i], h) for i in inds, k in 1:ic.nbody][:]
         dyc = [components(pd.dpoints[ib,it,:,2,k,i], h) for i in inds, k in 1:ic.nbody][:]
-        compute_impact_parameter!(t0, t0, xc, yc, dxc, dyc, grad)
+        compute_impact_parameter!(tc, t0, xc, yc, dxc, dyc, grad)
         return grad
     end
 
+    # Get orbital elements at the initial conditions
+    s = State(ic)
+    els = NbodyGradient.get_orbital_elements(s, ic)
+
     # Compare numerical and analytic derivative wrt the inital cartesian coordinates and masses
     coords = vcat([[x...,v...,m] for (x, v, m) in zip(eachcol(s_copy.x), eachcol(s_copy.v), s_copy.m)]...)
-    for it in 1:length(pd.times)
-        grad_num = grad(central_fdm(5, 1), c -> compute_b(c, s_copy, tt_copy, intr_copy, ic_copy, it), big.(coords))[1]
-        grad_analytic = compute_grad_b(Float64.(coords), State(ic), tt, intr, ic, it)
-        # println(maximum(abs.((Float64.(grad_num) .- grad_analytic) ./ grad_num)))
-        @test isapprox(asinh.(Float64.(grad_num)), asinh.(grad_analytic), norm=x -> maximum(abs.(x)))
+    for it in eachindex(pd.times)
+        t0 = pd.times[it]
+        ib = pd.bodies[it]
+        b0 = compute_impact_parameter(t0, t0, 2e-2, pd.points[ib,it,:,:])
+        bound = compute_transit_duration(b0, els[ib].P, k[ib-1], els[ib].a / rstar, els[ib].I) / 2
+        times = range(pd.times[it]-bound, stop=pd.times[it]+bound, length=10)
+
+        # Compute gradient at each time
+        for tc in times
+            grad_num = grad(central_fdm(2, 1), c -> compute_b(c, pd_copy, tt_copy, d_copy, intr_copy, ic_copy, it, big(tc)), big.(coords))[1]
+            grad_analytic = compute_grad_b(Float64.(coords), intr, ic, it, tc)
+            @test isapprox(asinh.(Float64.(grad_num)), asinh.(grad_analytic), norm=x -> maximum(abs.(x)))
+        end
     end
 end
 

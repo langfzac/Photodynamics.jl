@@ -6,10 +6,10 @@ import Photodynamics: IntegralArrays, integrate_simpson!
 import Photodynamics: integrate_timestep!, compute_flux, compute_flux!
 import Photodynamics: NbodyGradient.amatrix
 
-isapprox_maxabs(a,b) = isapprox(a, b, norm=x->maximum(abs.(x)))
+isapprox_maxabs(a,b; kwargs...) = isapprox(a, b; norm=x->maximum(abs.(x)), kwargs...)
 
-function setup_ICs(n, BJD::T, t0::T) where T<:Real
-    elements = T.(readdlm("elements.txt", ',')[1:n,:])
+function setup_ICs(n, BJD::T, t0::T; fname="elements.txt") where T<:Real
+    elements = T.(readdlm(fname, ',')[1:n,:])
     elements[2:end,3] .-= BJD # Shift initial transit times
     ic = ElementsIC(t0, n, elements)
     return ic
@@ -32,6 +32,13 @@ function compute_transit_times(ic, intr; grad=false)
     tt = TransitTiming(intr.tmax, ic)
     intr(s, tt; grad=grad)
     return tt
+end
+
+function compute_pd(s::State, ic::InitialConditions, intr::Integrator; grad=false)
+    tt = TransitTiming(intr.tmax, ic)
+    pd = TransitSeries(intr.tmax, ic)
+    intr(s, pd, tt; grad=grad)
+    return pd
 end
 
 function compute_pd(ic, intr; grad=false)
@@ -68,3 +75,5 @@ end
 get_trappist_rstar() = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)
 
 normalize_points!(points, rstar) = points./=rstar
+
+compute_transit_duration(b0, P, k, a, inc) = P / π * asin(sqrt((1+k)^2 + b0^2) / (a*sin(inc)))

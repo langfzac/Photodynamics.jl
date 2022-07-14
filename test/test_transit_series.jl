@@ -8,12 +8,12 @@ function test_integrator_methods(n)
     pd_provided = compute_pd(ic, tt, intr)
     pd_computed = compute_pd(ic, intr);
 
-    @test pd_provided.times == pd_computed.times
-    @test pd_provided.bodies == pd_computed.bodies
-
-    # Computed points array is likely longer than provided
+    # Computed arrays are likely longer than provided
     t_range = length(pd_provided.times)
+    @test pd_provided.times == pd_computed.times[1:t_range]
+    @test pd_provided.bodies == pd_computed.bodies[1:t_range]
     @test pd_provided.points ≈ pd_computed.points[:,1:t_range,:,:]
+    @test pd_provided.dpoints ≈ pd_computed.dpoints[:,1:t_range,:,:,:,:]
 
     # Make sure there's no extra computed points
     @test all(pd_computed.points[:,t_range+1:end,:,:] .== 0.0)
