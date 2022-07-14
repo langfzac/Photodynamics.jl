@@ -135,13 +135,13 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
 end
 
 function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
-    nc = length(tc) # Number of points of contact
+    # nc = length(tc) # Number of points of contact
     dt = lc.dt
     inv_rstar = inv(lc.rstar[1])
 
     # Integrate over each Exposure
     # TO-DO: Only iterate over the times around the transit.
-    for i in 1:lc.nobs
+    for i in eachindex(lc.tobs)
         tstart = lc.tobs[i] - 0.5*dt
         tend = lc.tobs[i] + 0.5*dt
 
@@ -151,7 +151,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
 
         # Check if points of contact are within exposure
         tlim = [tstart]
-        for j in 1:nc
+        for j in eachindex(tc)
             if tstart < tc[j] && tc[j] < tend
                 push!(tlim, tc[j])
             end
@@ -168,7 +168,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
             # integrate over exposure
-            for j in 1:length(tlim)-1
+            for j in eachindex(view(tlim[1:end-1]))
                 integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, dxc, dyc, trans, ia, lc.dbdq0, ib-1)
                 lc.flux[i] += ia.I_of_f[1]
                 lc.dfdq0[i,:] .+= ia.I_of_f[2:1+n_bodies*7]
@@ -178,7 +178,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             end
         else
             # Integrate over exposure
-            for j in 1:length(tlim)-1
+            for j in eachindex(view(tlim[1:end-1]))
                 integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
                 lc.flux[i] += ia.I_of_f[1]
             end
@@ -191,7 +191,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
     inv_rstar = inv(lc.rstar[1])
 
     # Compute the flux at each point
-    for i in 1:lc.nobs
+    for i in eachindex(lc.tobs)
         # Check if observation is outside of a transit
         if lc.tobs[i] > tc[end]; break; end
         if lc.tobs[i] < tc[1]; continue; end
@@ -268,6 +268,7 @@ function compute_flux!(tc::T, t0::T, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rst
     return
 end
 
+# There should be a way to do this using sparse matrices
 """
 Transform the jacobian wrt the initial Cartesian coordinates to initial orbital
 elements.
