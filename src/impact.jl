@@ -38,8 +38,7 @@ function compute_impact_parameter!(tc::T, t0::T, xc, yc, dxc, dyc, grad) where T
     b = sqrt(lx*lx + ly*ly)
 
     dbdlx = lx/b; dbdly = ly/b;
-    N = length(grad)
-    for p in 1:N
+    for p in eachindex(grad)
         dlxdp = dot(dxc[p],ts)
         dlydp = dot(dyc[p],ts)
         grad[p] = dbdlx*dlxdp + dbdly*dlydp
