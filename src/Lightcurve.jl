@@ -168,7 +168,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
             # integrate over exposure
-            for j in eachindex(view(tlim[1:end-1]))
+            for j in eachindex(@view(tlim[1:end-1]))
                 integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, dxc, dyc, trans, ia, lc.dbdq0, ib-1)
                 lc.flux[i] += ia.I_of_f[1]
                 lc.dfdq0[i,:] .+= ia.I_of_f[2:1+n_bodies*7]
@@ -178,7 +178,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             end
         else
             # Integrate over exposure
-            for j in eachindex(view(tlim[1:end-1]))
+            for j in eachindex(@view(tlim[1:end-1]))
                 integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
                 lc.flux[i] += ia.I_of_f[1]
             end
