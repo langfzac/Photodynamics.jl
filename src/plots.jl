@@ -24,10 +24,6 @@ const TIME_UNITS = Dict(
     tol = 1e-6,
     maxdepth = 6
 )
-    if get(plotattributes, :seriestype, :heatmap) != :heatmap
-        error("Riverplots must be heatmap seriestype. Got: $(st)")
-    end
-
     # Make a row of pixels, centered on mid point
     pixels = [-div(neach, 2):div(neach,2)-1;] .+ 0.5
 
@@ -52,7 +48,7 @@ const TIME_UNITS = Dict(
 
     # Now setup heatmap
     planet_labels = "abcdefghijklmnopqrstuvwxyz" # Assumes star is "a" and indices are linear
-    title --> "Planet $(planet_labels[ib])"
+    title --> "$(planet_labels[ib])"
     color --> :winter
     seriestype := :heatmap
 
