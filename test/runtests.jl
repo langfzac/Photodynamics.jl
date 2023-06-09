@@ -18,6 +18,7 @@ include("common.jl")
 
     print("Lightcurve... ")
     @testset "Lightcurve" begin
+        include("test_points_of_contact.jl")
         include("test_simpson.jl")
         include("test_integrate_timestep.jl")
         include("test_compute_flux.jl")
