@@ -25,9 +25,17 @@ include("common.jl")
         include("test_lightcurve.jl")
         include("test_compute_lightcurve.jl")
     end
+    println("Done.")
 
     print("Breaking Cases...")
     @testset "Breaking Cases" begin
         include("test_warn.jl")
     end
+    println("Done.")
+
+    print("Utility Functions...")
+    @testset "Utility Functions" begin
+        include("test_utils.jl")
+    end
+    println("Done.")
 end

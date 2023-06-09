@@ -6,6 +6,7 @@ import Photodynamics: IntegralArrays, integrate_simpson!
 import Photodynamics: integrate_timestep!, compute_flux, compute_flux!
 import Photodynamics: NbodyGradient.amatrix
 import Photodynamics: points_of_contact_2, points_of_contact_4
+import Photodynamics: linear_regression
 
 function isapprox_maxabs(a,b; kwargs...)
     isap = isapprox(a, b; norm=x->maximum(abs.(x)), kwargs...)
