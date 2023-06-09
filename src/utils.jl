@@ -1,15 +1,18 @@
 # Collection of utility functions
 
-"""Compute a linear regression using linear least-squares."""
+"""
+Compute a linear regression using linear least-squares.
+"""
 function linear_regression(x,y)
     @assert length(y) == length(x) "x and y must be the same length"
     N = length(x)
     X = [ones(N) x]
 
-    β = inv(X'X)X'y
+    β = (X'X) \ X'y
 end
 
-"""Get the transit times for a particular body
+"""
+Get the transit times for a particular body.
 """
 function get_transit_times(ts::TransitSeries{<:Real, ComputedTimes}, ib::Integer)
     n = length(ts.count)
@@ -18,8 +21,8 @@ function get_transit_times(ts::TransitSeries{<:Real, ComputedTimes}, ib::Integer
     return ts.times[ts.bodies .== ib]
 end
 
-"""Compute linear ephemeris for a particular transiting body
-
+"""
+Compute linear ephemeris for a particular transiting body.
 """
 function get_linear_transit_times(ts, ib)
     n = length(ts.count)
