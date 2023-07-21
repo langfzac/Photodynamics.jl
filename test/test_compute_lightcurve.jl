@@ -65,7 +65,7 @@ function test_lightcurve(n)
     @test isapprox_maxabs(dlc_noint.flux, lc_noint.flux)
 end
 
-function compute_photodynamics(θ::AbstractVector{T}, n) where T<:Real
+function compute_photodynamics(θ::AbstractVector{T}, n, integrated::Bool) where T<:Real
     t0 = zero(T)
     ind = 7 * (n - 1)
 
@@ -82,17 +82,18 @@ function compute_photodynamics(θ::AbstractVector{T}, n) where T<:Real
     cadence = T(2 / 60 / 24)  # 2 minute cadence in days
     obs_duration = T(2.0)  # Duration of observations in days
     obs_times = collect(t0:cadence:obs_duration)
-    lc = Lightcurve(zero(T), obs_times, ones(T, length(obs_times)), zeros(T, length(obs_times)), u_n, k, rstar)
+    dt = integrated ? cadence : zero(T)
+    lc = Lightcurve(dt, obs_times, ones(T, length(obs_times)), zeros(T, length(obs_times)), u_n, k, rstar)
 
     intr = Integrator(T(0.05), T(0.0), obs_duration)
     ts = TransitSeries(obs_duration, ic)
     tt = TransitTiming(obs_duration, ic)
     intr(s, ts, tt; grad=false)
-    compute_lightcurve!(lc, ts, tol=T(1e-8))
+    compute_lightcurve!(lc, ts, tol=T(1e-8), maxdepth=20)
     return lc.flux
 end
 
-function test_nonintegrated_jacobian(n)
+function test_jacobians(n)
     t0 = 0.0
     ic = setup_ICs(n, 0.0, t0)
     rstar = get_trappist_rstar()
@@ -103,8 +104,9 @@ function test_nonintegrated_jacobian(n)
     cadence = 2 / 60 / 24  # 2 minute cadence in days
     obs_duration = 2.0  # Duration of observations in days
     obs_times = collect(t0:cadence:obs_duration)
-    lc = Lightcurve(0.0, obs_times, ones(length(obs_times)), zeros(length(obs_times)), u_n, k, rstar, 7*n)
-
+    lc_noint = Lightcurve(0.0, obs_times, ones(length(obs_times)), zeros(length(obs_times)), u_n, k, rstar, 7*n)
+    #lc_int = Lightcurve(cadence, obs_times, ones(length(obs_times)), zeros(length(obs_times)), u_n, k, rstar, 7*n)
+ 
     # Compute the dynamical model
     intr = Integrator(0.05, obs_duration)
     s = State(ic)
@@ -113,31 +115,41 @@ function test_nonintegrated_jacobian(n)
     intr(s, ts, tt; grad=true)
 
     # Compute the photometry
-    compute_lightcurve!(lc, ts)
+    compute_lightcurve!(lc_noint, ts)
+    #compute_lightcurve!(lc_int, ts, tol=1e-8, maxdepth=20)
 
     # Transform the jacobian to orbital elements
-    transform_to_elements!(s, lc)
+    transform_to_elements!(s, lc_noint)
+    #transform_to_elements!(s, lc_int)
 
     θ_init = [vec(ic.elements[2:end, :])..., u_n..., k..., rstar]
-    jac_num = jacobian(central_fdm(3,1), x->compute_photodynamics(x,n), big.(θ_init))[1]
+    jac_noint_num = jacobian(central_fdm(3,1), x->compute_photodynamics(x,n,false), big.(θ_init))[1]
+    #jac_int_num = jacobian(central_fdm(3,1), x->compute_photodynamics(x,n,true), big.(θ_init))[1]
 
     jac_lc_inds = [7,14,1,8,2,9,3,10,4,11,5,12,6,13] .+ 7
     jac_num_inds = [1,2,3,4,5,6,7,8,9,10,11,12,13,14];
 
     # Check the orbital elements
     for i in eachindex(jac_lc_inds)
-        @test isapprox_maxabs(jac_num[:, jac_num_inds[i]], lc.dfdelements[1:end-1, jac_lc_inds[i]])
+        @test isapprox_maxabs(jac_noint_num[:, jac_num_inds[i]], lc_noint.dfdelements[1:end-1, jac_lc_inds[i]])
+        #@test isapprox_maxabs(jac_int_num[:, jac_num_inds[i]], lc_int.dfdelements[1:end, jac_lc_inds[i]])
     end
 
     # Check transit params
-    @test isapprox_maxabs(jac_num[:, 15], lc.dfdu[1:end-1,1])
-    @test isapprox_maxabs(jac_num[:, 16], lc.dfdu[1:end-1,2])
-    @test isapprox_maxabs(jac_num[:, 17], lc.dfdk[1:end-1,1])
-    @test isapprox_maxabs(jac_num[:, 18], lc.dfdk[1:end-1,2])
-    @test isapprox_maxabs(jac_num[:, 19], lc.dfdr[1:end-1])
+    @test isapprox_maxabs(jac_noint_num[:, 15], lc_noint.dfdu[1:end-1,1])
+    @test isapprox_maxabs(jac_noint_num[:, 16], lc_noint.dfdu[1:end-1,2])
+    @test isapprox_maxabs(jac_noint_num[:, 17], lc_noint.dfdk[1:end-1,1])
+    @test isapprox_maxabs(jac_noint_num[:, 18], lc_noint.dfdk[1:end-1,2])
+    @test isapprox_maxabs(jac_noint_num[:, 19], lc_noint.dfdr[1:end-1])
+
+    #=@test isapprox_maxabs(jac_int_num[:, 15], lc_int.dfdu[1:end-1,1])
+    @test isapprox_maxabs(jac_int_num[:, 16], lc_int.dfdu[1:end-1,2])
+    @test isapprox_maxabs(jac_int_num[:, 17], lc_int.dfdk[1:end-1,1])
+    @test isapprox_maxabs(jac_int_num[:, 18], lc_int.dfdk[1:end-1,2])
+    @test isapprox_maxabs(jac_int_num[:, 19], lc_int.dfdr[1:end-1])=#
 end
 
 @testset "Lightcurve" begin
     test_lightcurve(8)
-    test_nonintegrated_jacobian(3)
+    test_jacobians(3)
 end
