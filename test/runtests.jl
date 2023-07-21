@@ -38,4 +38,9 @@ include("common.jl")
         include("test_utils.jl")
     end
     println("Done.")
+
+    print("Plotting...")
+    @testset "Plotting..." begin
+        include("test_plots.jl")
+    end
 end

@@ -1,5 +1,6 @@
-using DelimitedFiles, FiniteDifferences
+using DelimitedFiles, Plots, FiniteDifferences
 
+import RecipesBase: apply_recipe
 import Photodynamics: components, transit_init
 import Photodynamics: compute_impact_parameter, compute_impact_parameter!
 import Photodynamics: IntegralArrays, integrate_simpson!
