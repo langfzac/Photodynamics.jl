@@ -14,7 +14,7 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 Limbdark = "0.1.1"
-NbodyGradient = "0.1"
+NbodyGradient = "0.1, 0.2"
 Reexport = "1.0"
 Roots = "1.0, 2"
 SpecialFunctions = "1.4, 2"
