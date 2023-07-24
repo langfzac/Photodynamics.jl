@@ -74,6 +74,16 @@ function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<
     TransitSeries{T, ComputedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
 
+function zero_out!(ts::TransitSeries{T,TT}) where {T<:Real,TT}
+    for i in eachindex(fieldnames(TransitSeries))
+        if typeof(getfield(ts, i)) <: Array{T}
+            getfield(ts, i) .= zero(T)
+        end
+    end
+    ts.count .= zero(T)
+    return
+end
+
 """Compute 7 points about each transit time.
 
 Integrate to right before the first transit expansion point. Save state and
@@ -187,6 +197,13 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         prior_count = copy(tt.count)
         NbodyGradient.detect_transits!(s,d,tt,intr,grad=grad)
 
+        # Break if we've exceeded the transit array
+        # This should only happen during parameter inference.
+        if any(size(tt.tt)[2] .< tt.count)
+            @warn "Exceeded transit times array: tt.tt"
+            break
+        end
+
         # Check whether a transit did occur.
         # If so, compute 7 points around transit time.
         # This assumes the integration timestep is larger than the
@@ -207,12 +224,22 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         if length(ibodies) > 1; set_state!(tt.s_prior, s_points); end
 
         # Loop over each transit and compute expansion points
+        break_out = false
         for (j,ibody) in enumerate(ibodies)
             # If more than one transit occured, reset state to pre-transit
             if j > 1; set_state!(s_points, tt.s_prior); end
 
             # Save time and body index to TransitSeries
             itime = sum(tt.count) - (length(ibodies) - j)
+
+            # Break if we've run out of room in array
+            # Should only happen during parameter inference.
+            if itime > length(ts.times);
+                @warn "Exceeded times array: ts.times"
+                break_out = true
+                break
+            end
+
             ts.times[itime] = tt.tt[ibody, tt.count[ibody]]
             ts.bodies[itime] = ibody
 
@@ -243,6 +270,7 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
                 compute_points!(s_points, ts, t_first, s_points.t[1], ts.h, ibody, itime, intr)
             end
         end
+        break_out && break
 
         # Shift counter by 1 and wrap at nstates
         state_counter = (
@@ -254,10 +282,6 @@ function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::
         set_state!(s_points, tt.s_prior)
         set_state!(ts.s_prior[first(state_counter)], s)
     end
-
-    # Clean up arrays/remove buffer
-    while ts.bodies[end] == 0
-        pop!(ts.bodies)
-        pop!(ts.times)
-    end
+    ts.count .= tt.count
+    return
 end

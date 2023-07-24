@@ -11,6 +11,7 @@ struct Lightcurve{T<:Real}
     dfdk::Matrix{T}   # Derivatives wrt the radius ratios
     dfdq0::Matrix{T}  # Derivatives wrt initial Nbody Cartesian coordinates and masses
     dfdr::Vector{T}   # Derivatives wrt stellar radius
+    dfdelements::Matrix{T}
 
     # Transit parameters
     u_n::Vector{T}   # Limbdark coefficients
@@ -35,7 +36,8 @@ struct Lightcurve{T<:Real}
         dfdq0 = zeros(T, nobs, n_params)
         dbdq0 = zeros(T, n_params)
         dfdr = zeros(T, nobs)
-        return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,dfdu,dfdk,dfdq0,dfdr,copy(u_n),copy(k),[rstar],dtinv,dbdq0,n_params,do_grad)
+        dfdelements = zeros(T, nobs, n_params)
+        return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,dfdu,dfdk,dfdq0,dfdr,dfdelements,copy(u_n),copy(k),[rstar],dtinv,dbdq0,n_params,do_grad)
     end
 end
 
@@ -88,15 +90,15 @@ function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) wh
     return SVector{2, T}(t1,t4)
 end
 
-function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6) where {T<:Real, TT<:AbstractTransitTimes}
+function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6, body_index::Int64=0) where {T<:Real, TT<:AbstractTransitTimes}
 
     zero_out!(lc) # Zero out model arrays
 
     # Check if we're doing an integrated lightcurve
-    ia = lc.dt == 0.0 ? 0.0 : IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
+    ia = lc.dt == 0.0 ? zero(T) : IntegralArrays(lc.do_grad ? (lc.n_params + length(lc.u_n) + length(lc.k) + 2) : 1, maxdepth, tol) # Plus 2 for flux and rstar
 
     # Make transit structure (will be updated with proper r and b later)
-    trans = transit_init(lc.k[1], 0.0, lc.u_n, lc.do_grad)
+    trans = transit_init(lc.k[1], zero(T), lc.u_n, lc.do_grad)
 
     # Iterate over each transit time and sum Lightcurve
     rstar = lc.rstar[1]
@@ -104,6 +106,11 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
         # check for transit
         t0 = ts.times[it]   # Get "data" transit time (expansion point)
         ib = ts.bodies[it]  # Get transiting body
+        if ib == 0; break; end  # Break if we've reached the end of the transits
+
+        # Check whether we're computing flux for only a single body
+        # If we are, skip all other body indices.
+        if body_index != 0 && body_index != ib; continue; end
 
         # Get the impact parameter at the transit midpoint (computed above)
         b0 = compute_impact_parameter(t0, t0, ts.h, @views(ts.points[ib,it,:,:]./rstar))
@@ -128,13 +135,13 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
 end
 
 function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
-    nc = length(tc) # Number of points of contact
+    # nc = length(tc) # Number of points of contact
     dt = lc.dt
     inv_rstar = inv(lc.rstar[1])
 
     # Integrate over each Exposure
     # TO-DO: Only iterate over the times around the transit.
-    for i in 1:lc.nobs
+    for i in eachindex(lc.tobs)
         tstart = lc.tobs[i] - 0.5*dt
         tend = lc.tobs[i] + 0.5*dt
 
@@ -144,7 +151,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
 
         # Check if points of contact are within exposure
         tlim = [tstart]
-        for j in 1:nc
+        for j in eachindex(tc)
             if tstart < tc[j] && tc[j] < tend
                 push!(tlim, tc[j])
             end
@@ -161,7 +168,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             dyc = [components(ts.dpoints[ib,it,:,2,k,i].*inv_rstar, ts.h) for i in 1:7, k in 1:n_bodies][:]
 
             # integrate over exposure
-            for j in 1:length(tlim)-1
+            for j in eachindex(@view(tlim[1:end-1]))
                 integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, dxc, dyc, trans, ia, lc.dbdq0, ib-1)
                 lc.flux[i] += ia.I_of_f[1]
                 lc.dfdq0[i,:] .+= ia.I_of_f[2:1+n_bodies*7]
@@ -171,7 +178,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
             end
         else
             # Integrate over exposure
-            for j in 1:length(tlim)-1
+            for j in eachindex(@view(tlim[1:end-1]))
                 integrate_timestep!(t0, tlim[j], tlim[j+1], xc, yc, trans, ia)
                 lc.flux[i] += ia.I_of_f[1]
             end
@@ -184,7 +191,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
     inv_rstar = inv(lc.rstar[1])
 
     # Compute the flux at each point
-    for i in 1:lc.nobs
+    for i in eachindex(lc.tobs)
         # Check if observation is outside of a transit
         if lc.tobs[i] > tc[end]; break; end
         if lc.tobs[i] < tc[1]; continue; end
@@ -260,3 +267,10 @@ function compute_flux!(tc::T, t0::T, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rst
     lc.dfdr[i] += -trans.dfdrb[2]*trans.b*inv_rstar     # Stellar radius
     return
 end
+
+# There should be a way to do this using sparse matrices
+"""
+Transform the jacobian wrt the initial Cartesian coordinates to initial orbital
+elements.
+"""
+transform_to_elements!(s::State{T}, lc::Lightcurve{T}) where T<:Real = mul!(lc.dfdelements, lc.dfdq0, s.jac_init);

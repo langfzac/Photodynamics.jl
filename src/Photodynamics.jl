@@ -3,7 +3,7 @@ module Photodynamics
 using Reexport
 @reexport using NbodyGradient
 
-using StaticArrays, LinearAlgebra, Roots, SpecialFunctions, Limbdark
+using StaticArrays, LinearAlgebra, Roots, SpecialFunctions, Limbdark, Statistics, RecipesBase
 
 import Limbdark: transit_poly_g, transit_poly_g!, Transit_Struct
 import NbodyGradient: InitialConditions, Derivatives, ElementsIC, TransitOutput
@@ -11,11 +11,15 @@ import NbodyGradient: check_step, set_state!
 
 export dot, compute_lightcurve!
 export TransitSeries, Lightcurve
+export transform_to_elements!
+export get_transit_times, get_linear_transit_times
 
 include("simpson.jl")
 include("impact.jl")
 include("TransitSeries.jl")
 include("Lightcurve.jl")
+include("utils.jl")
+include("plots.jl")
 
 """Constant coefficients for the series expansion."""
 struct Coefficients{T<:Real}
