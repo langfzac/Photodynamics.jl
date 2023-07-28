@@ -4,7 +4,13 @@ on:
     branches:
       - main
     tags: '*'
+    paths-ignore:
+      - 'README.md'
+      - 'notebooks/**'
   pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'notebooks/**'
 
 jobs:
   test:
