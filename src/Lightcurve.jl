@@ -1,6 +1,36 @@
 # User-level methods to compute lightcurves
+abstract type AbstractLightcurve{T} end
 
-struct Lightcurve{T<:Real}
+struct Lightcurve{T<:Real} <: AbstractLightcurve{T}
+    dt::T             # Exposure time
+    tobs::Vector{T}   # Observed times
+    fobs::Vector{T}   # Observed flux
+    eobs::Vector{T}   # Measurement errors
+    nobs::Int64       # number of flux measurements
+    flux::Vector{T}   # Computed model flux
+
+    # Transit parameters
+    u_n::Vector{T}   # Limbdark coefficients
+    k::Vector{T}     # radius ratios
+    rstar::Vector{T} # Stellar radius
+
+    # Integral arrays/values
+    dtinv::T          # Inverse of the exposure time
+    n_params::Int64   # Number of nbody model parameters
+    do_grad::Bool     
+
+    function Lightcurve(dt::T, tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}, rstar::T) where T<:Real
+        @assert (length(tobs) == length(fobs)) && (length(tobs) == length(eobs)) "Data arrays are different sizes"
+        n_params = 7 * (length(k) + 1)
+        nobs = length(tobs)
+        flux = zeros(T,nobs)
+        dtinv = dt == 0.0 ? 0.0 : inv(dt)
+        do_grad = false
+        return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,copy(u_n),copy(k),[rstar],dtinv,n_params,do_grad)
+    end
+end
+
+struct dLightcurve{T<:Real} <: AbstractLightcurve{T}
     dt::T             # Exposure time
     tobs::Vector{T}   # Observed times
     fobs::Vector{T}   # Observed flux
@@ -23,11 +53,11 @@ struct Lightcurve{T<:Real}
     dbdq0::Vector{T}  # derivative of the impact parameter wrt the Nbody initial conditions
     n_params::Int64   # Number of nbody model parameters
     do_grad::Bool     # Compute gradients or not
-
-    function Lightcurve(dt::T, tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}, rstar::T, n_params::Int64=0) where T<:Real
+    
+    function dLightcurve(dt::T, tobs::Vector{T}, fobs::Vector{T}, eobs::Vector{T}, u_n::Vector{T}, k::Vector{T}, rstar::T) where T<:Real
         @assert (length(tobs) == length(fobs)) && (length(tobs) == length(eobs)) "Data arrays are different sizes"
-        @assert n_params >= 0 "Number of model parameters must be a positive integer"
-        n_params > 0 ? do_grad = true : do_grad = false
+        n_params = 7 * (length(k) + 1) # Get the number of Nbody parameters
+        do_grad = true
         nobs = length(tobs)
         flux = zeros(T,nobs)
         dtinv = dt == 0.0 ? 0.0 : inv(dt)
@@ -39,37 +69,52 @@ struct Lightcurve{T<:Real}
         dfdelements = zeros(T, nobs, n_params)
         return new{T}(dt,copy(tobs),copy(fobs),copy(eobs),nobs,flux,dfdu,dfdk,dfdq0,dfdr,dfdelements,copy(u_n),copy(k),[rstar],dtinv,dbdq0,n_params,do_grad)
     end
+
 end
 
 """Setup Lightcurve without having data"""
-function Lightcurve(dt::T, duration::T, u_n::Vector{T}, k::Vector{T}, rstar::T, n_params::Int64=0) where T<:Real
+function Lightcurve(dt::T, duration::T, u_n::Vector{T}, k::Vector{T}, rstar::T) where T<:Real
     tobs = collect(0.0:dt:duration)
-    return Lightcurve(dt, tobs, zeros(T, size(tobs)), zeros(T,size(tobs)), u_n, k, rstar, n_params)
+    return Lightcurve(dt, tobs, zeros(T, size(tobs)), zeros(T,size(tobs)), u_n, k, rstar)
+end
+
+function dLightcurve(dt::T, duration::T, u_n::Vector{T}, k::Vector{T}, rstar::T) where T<:Real
+    tobs = collect(0.0:dt:duration)
+    return dLightcurve(dt, tobs, zeros(T, size(tobs)), zeros(T,size(tobs)), u_n, k, rstar)
 end
 
 """Zero out the model arrays"""
-function zero_out!(lc::Lightcurve{T}) where T<:Real
+zero_out!(lc::Lightcurve{T}) where T<:Real = lc.flux .= 0.0; nothing
+
+function zero_out!(lc::dLightcurve{T}) where T<:Real
     lc.dfdu .= 0.0
     lc.dfdk .= 0.0
     lc.dfdq0 .= 0.0
     lc.dfdr .= 0.0
+    lc.dbdq0 .= 0.0
+    lc.dfdelements .= 0.0
     lc.flux .= 0.0
+    return
 end
 
 # Normalize the exposure integration by the exposure time.
-function normalize!(lc::Lightcurve{T}, ia::IntegralArrays{T}) where T<:Real
+@inline function normalize!(lc::Lightcurve{T}, ia::IntegralArrays{T}) where T<:Real
     lc.flux .*= lc.dtinv # Divide by exposure time to get average flux
-    if lc.do_grad
-        # Do the same for derivatives
-        lc.dfdk .*= lc.dtinv
-        lc.dfdu .*= lc.dtinv
-        lc.dfdq0 .*= lc.dtinv
-        lc.dfdr .*= lc.dtinv
-    end
+end
+
+@inline function normalize!(lc::dLightcurve{T}, ia::IntegralArrays{T}) where T<:Real
+    lc.flux .*= lc.dtinv # Divide by exposure time to get average flux
+    # Do the same for derivatives
+    lc.dfdk .*= lc.dtinv
+    lc.dfdu .*= lc.dtinv
+    lc.dfdq0 .*= lc.dtinv
+    lc.dfdr .*= lc.dtinv
+    return
 end
 
 # If non-integrated exposure, do nothing
 @inline normalize!(lc::Lightcurve{T}, ia::T) where T<:Real = nothing
+@inline normalize!(lc::dLightcurve{T}, ia::T) where T<:Real = nothing
 
 function find_transit_time(t0::T, h::T, points::AbstractMatrix{T}) where T<:Real
     tt = find_zero(t->compute_impact_parameter(t, t0, h, points), t0)
@@ -90,7 +135,7 @@ function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) wh
     return SVector{2, T}(t1,t4)
 end
 
-function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6, body_index::Int64=0) where {T<:Real, TT<:AbstractTransitTimes}
+function compute_lightcurve!(lc::AbstractLightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6, body_index::Int64=0) where {T<:Real, TT<:AbstractTransitTimes}
 
     zero_out!(lc) # Zero out model arrays
 
@@ -134,7 +179,7 @@ function compute_lightcurve!(lc::Lightcurve{T}, ts::TransitSeries{T, TT}; tol::T
     return
 end
 
-function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
+function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::AbstractLightcurve{T},ts::TransitSeries{T},ia::IntegralArrays{T}) where {N, T<:Real}
     # nc = length(tc) # Number of points of contact
     dt = lc.dt
     inv_rstar = inv(lc.rstar[1])
@@ -187,7 +232,7 @@ function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Tr
     return
 end
 
-function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::Lightcurve{T},ts::TransitSeries{T},ia::T) where {N, T<:Real}
+function integrate_transit!(ib::Int64,it::Int64,t0::T,tc::SVector{N,T},trans::Transit_Struct{T},lc::AbstractLightcurve{T},ts::TransitSeries{T},ia::T) where {N, T<:Real}
     inv_rstar = inv(lc.rstar[1])
 
     # Compute the flux at each point
@@ -273,4 +318,4 @@ end
 Transform the jacobian wrt the initial Cartesian coordinates to initial orbital
 elements.
 """
-transform_to_elements!(s::State{T}, lc::Lightcurve{T}) where T<:Real = mul!(lc.dfdelements, lc.dfdq0, s.jac_init);
+transform_to_elements!(s::State{T}, lc::dLightcurve{T}) where T<:Real = mul!(lc.dfdelements, lc.dfdq0, s.jac_init);
