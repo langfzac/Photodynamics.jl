@@ -82,7 +82,7 @@ function test_compute_timestep_derivatives(n)
             ki = ib - 1
             trans_grad = transit_init(k[ki], 0.0, u_n, true)
             n_params = length(dbdq0) + length(k) + length(u_n) + 1 # flux
-            lc = Lightcurve(0.0, [0.0], [0.0], [0.0], u_n, k, rstar, 7*(length(k)+1))
+            lc = dLightcurve(0.0, [0.0], [0.0], [0.0], u_n, k, rstar)
             compute_flux!(texp, t0, xc, yc, dxc, dyc, lc, trans_grad, 1, ki, inv(rstar))
 
             # Check flux again

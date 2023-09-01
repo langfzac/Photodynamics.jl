@@ -23,7 +23,7 @@ function test_lightcurve(n)
     tobs = collect(pd.times[1]-10*intr.h:dt:obs_duration)
     lc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
     lc_noint = Lightcurve(0.0, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
-    dlc = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
+    dlc = dLightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
     compute_lightcurve!(lc, pd_provided, tol=1e-11, maxdepth=40)
     compute_lightcurve!(lc, pd_computed, tol=1e-11, maxdepth=40)
 
@@ -45,8 +45,8 @@ function test_lightcurve(n)
     haskey(ENV, "CI") ? println("\nProvided - Computed: ", maximum(abs.(lc_p.flux .- lc_c.flux))) : nothing
     @test isapprox_maxabs(lc_p.flux, lc_c.flux)
 
-    dlc_p = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
-    dlc_c = Lightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
+    dlc_p = dLightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
+    dlc_c = dLightcurve(dt, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
     compute_lightcurve!(dlc_p, pd_provided, tol=1e-11, maxdepth=40)
     compute_lightcurve!(dlc_c, pd_computed, tol=1e-11, maxdepth=40)
     haskey(ENV, "CI") ? println("dProvided - dComputed: ", maximum(abs.(dlc_p.flux .- dlc_c.flux))) : nothing
@@ -58,7 +58,7 @@ function test_lightcurve(n)
     @test isapprox_maxabs(dlc_c.flux, lc_c.flux)
 
     lc_noint = Lightcurve(0.0, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
-    dlc_noint = Lightcurve(0.0, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar, n * 7)
+    dlc_noint = dLightcurve(0.0, copy(tobs), copy(tobs), zeros(length(tobs)), u_n, k, rstar)
     compute_lightcurve!(lc_noint, pd_computed, tol=1e-11, maxdepth=40)
     compute_lightcurve!(dlc_noint, pd_computed, tol=1e-11, maxdepth=40)
     haskey(ENV, "CI") ? println("dnoint - noint: ", maximum(abs.(dlc_noint.flux .- lc_noint.flux))) : nothing
@@ -104,7 +104,7 @@ function test_jacobians(n)
     cadence = 2 / 60 / 24  # 2 minute cadence in days
     obs_duration = 2.0  # Duration of observations in days
     obs_times = collect(t0:cadence:obs_duration)
-    lc_noint = Lightcurve(0.0, obs_times, ones(length(obs_times)), zeros(length(obs_times)), u_n, k, rstar, 7*n)
+    lc_noint = dLightcurve(0.0, obs_times, ones(length(obs_times)), zeros(length(obs_times)), u_n, k, rstar)
     #lc_int = Lightcurve(cadence, obs_times, ones(length(obs_times)), zeros(length(obs_times)), u_n, k, rstar, 7*n)
  
     # Compute the dynamical model
