@@ -1,7 +1,7 @@
 name = "Photodynamics"
 uuid = "19d19b8a-d445-44de-bef5-58c3ebc30fa7"
 authors = ["Zach Langford <langfzac@uw.edu> and contributors"]
-version = "0.2.0"
+version = "0.3.0"
 
 [deps]
 Limbdark = "01eff828-7024-11e9-3df0-8b77921d67e3"
