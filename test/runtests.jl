@@ -1,3 +1,7 @@
+# Allow DispatchDoctor to traverse the tests
+using Preferences: set_preferences!
+set_preferences!("Photodynamics", "instability_check" => "error")
+
 using Photodynamics
 using Test
 
