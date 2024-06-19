@@ -9,8 +9,11 @@ import Limbdark: transit_poly_g, transit_poly_g!, Transit_Struct
 import NbodyGradient: InitialConditions, Derivatives, ElementsIC, TransitOutput
 import NbodyGradient: check_step, set_state!
 
+using DispatchDoctor: @stable
+@stable default_mode="disable" begin
+
 export dot, compute_lightcurve!
-export TransitSeries, Lightcurve
+export TransitSeries, Lightcurve, dLightcurve
 export transform_to_elements!
 export get_transit_times, get_linear_transit_times
 
@@ -39,4 +42,5 @@ end
 
 const COEFF = Coefficients();
 
+end
 end

@@ -29,10 +29,10 @@ using Photodynamics, Plots
 # Angles: radians
 N = 3
 t0 = 0.0
-star = Elements(m = 1.0)
-planet_b = Elements(m = 3e-5, P = 1.5, t0=0.32, ecosϖ = 0.03, I =  π/2)
-planet_c = Elements(m = 6e-5, P = 2.4, t0=0.35, ecosϖ = 0.02, I =  π/2)
-ic = ElementsIC(t0, 3, star, planet_b, planet_c)
+star = Elements(m = 1)
+planet_b = Elements(m = 3e-5, P = 1.5, t0=0.32, ecosω = 0.03, I =  π/2)
+planet_c = Elements(m = 6e-5, P = 2.4, t0=0.35, ecosω = 0.02, I =  π/2)
+ic = ElementsIC(t0, N, star, planet_b, planet_c)
 
 # Stellar/transit properties
 rstar = 0.00465047 * 0.1192 # Trappist-1 (Rstar/AU)

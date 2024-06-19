@@ -10,9 +10,17 @@ function test_lightcurve_constructors(n)
     lc1 = Lightcurve(dt, tobs, zeros(size(tobs)), zeros(size(tobs)), u_n, k, rstar)
     lc2 = Lightcurve(dt, obs_duration, u_n, k, rstar)
 
+    dlc1 = dLightcurve(dt, tobs, zeros(size(tobs)), zeros(size(tobs)), u_n, k, rstar)
+    dlc2 = dLightcurve(dt, obs_duration, u_n, k, rstar)
+
     for field in fieldnames(Lightcurve)
         @test getfield(lc1, field) == getfield(lc2, field)
     end
+
+    for field in fieldnames(dLightcurve)
+        @test getfield(dlc1, field) == getfield(dlc2, field)
+    end
+
     return
 end
 
