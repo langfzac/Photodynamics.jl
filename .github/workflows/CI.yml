@@ -4,13 +4,19 @@ on:
     branches:
       - main
     tags: '*'
-    paths-ignore:
-      - 'README.md'
-      - 'notebooks/**'
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'docs/**'
+      - '.github/workflows/CI.yml'
+      - 'Project.toml'
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - 'notebooks/**'
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'docs/**'
+      - '.github/workflows/CI.yml'
+      - 'Project.toml'
 
 jobs:
   test:
