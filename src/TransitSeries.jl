@@ -115,6 +115,8 @@ function zero_out!(ts::TransitSeries{T,TT}) where {T<:Real,TT}
     return
 end
 
+Base.broadcastable(ts::TransitSeries) = Ref(ts)
+
 """
     (intr::Integrator)(s, ts, d=nothing; grad=false)
 

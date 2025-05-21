@@ -1,6 +1,8 @@
 # User-level methods to compute lightcurves
 abstract type AbstractLightcurve{T} end
 
+Base.broadcastable(lc::AbstractLightcurve) = Ref(lc)
+
 """
     Lightcurve{T<:Real} <: AbstractLightcurve{T}
 
