@@ -4,6 +4,17 @@ abstract type AbstractTransitTimes end
 struct ComputedTimes <: AbstractTransitTimes end
 struct ProvidedTimes <: AbstractTransitTimes end
 
+"""
+    TransitSeries{T<:Real, TT<:AbstractTransitTimes}
+
+Transit times, PK20 expansion points about each transit, and derivatives.
+
+# Fields (relevant to the user)
+- `times::Vector{T}` : Transit times for all bodies, in chronological order [days]
+- `bodies::Vector{T}` : The body index which transited at a given transit time in `times`. 
+- `points::Array{T, 4}` : Expansion points around each transit [body, transit, 7, 2]
+- `points::Array{T, 6}` : Derivatives of the expansion points around each transit [body, transit, 7, 2, body, parameter]
+"""
 struct TransitSeries{T<:Real, TT<:AbstractTransitTimes}
     times::Vector{T}      # Transit times, sequentially
     bodies::Vector{Int64} # Transiting body at the ith transit time
@@ -18,7 +29,17 @@ struct TransitSeries{T<:Real, TT<:AbstractTransitTimes}
     s_prior::Vector{State{T}}
 end
 
-"""Pass a set of transit times"""
+"""
+    TransitSeries(times, ic; h=2e-2)
+
+Constructor for [`TransitSeries`](@ref) type. Transit times have been pre-computed.
+
+# Arguments
+- `times::Matrix{T}` : Matrix of pre-computed transit times.
+- `ic::InitialConditions{T}` : A set of initial conditions. 
+### Keyword Args
+- `h::T=2e-2` : Distance between PK20 expansion points [days]
+"""
 function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h::T=T(2e-2)) where T<:Real
     ntt = sum(times .> ic.t0) # Total transits, assumes no transits <= ic.t0
 
@@ -55,7 +76,17 @@ function TransitSeries(times::Matrix{T}, ic::InitialConditions{T}; h::T=T(2e-2))
     TransitSeries{T, ProvidedTimes}(times, bodies, points, dpoints, h, ntt, intr_times, count, s_prior)
 end
 
-"""Need to compute transit times"""
+"""
+    TransitSeries(tmax, ic; h=2e-2)
+
+Constructor for [`TransitSeries`](@ref) type. Computes transit times of the system specified by `ic`.
+
+# Arguments
+- `tmax::T` : Total integration time for the N-body integrator.
+- `ic::InitialConditions{T}` : A set of initial conditions. 
+### Keyword Args
+- `h::T=2e-2` : Distance between PK20 expansion points [days]
+"""
 function TransitSeries(tmax::T, ic::InitialConditions{T}; h::T=T(2e-2)) where T<:Real
     ntt::Int64 = 0  # Total expected transits, assumes no transits <= ic.t0
     for P in ic.elements[:,2]
@@ -84,13 +115,26 @@ function zero_out!(ts::TransitSeries{T,TT}) where {T<:Real,TT}
     return
 end
 
-"""Compute 7 points about each transit time.
+Base.broadcastable(ts::TransitSeries) = Ref(ts)
 
-Integrate to right before the first transit expansion point. Save state and
-integrate for 7 steps at h=ts.h. Revert to pre-transit state and continue to
-next transit.
+"""
+    (intr::Integrator)(s, ts, d=nothing; grad=false)
+
+Carry out N-body integration and compute 7 points about each transit time. Expects transit times have been pre-computed.
+
+# Arguments
+- `s::State{T}` : N-body problem state.
+- `ts::TransitSeries{T, ProvidedTimes}` : Transit series which has pre-computed transit times
+### Optional
+- `d::Union{Derivatives, Nothing}=nothing` : Allows the user to provide a pre-allocated `Derivatives` type. If `nothing`, it will be allocated inside the function.
+### Keyword Args
+- `grad::Bool=false` : Whether to compute derivatives. Default is no derivatives (`false`).
 """
 function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ProvidedTimes},d::Union{Derivatives,Nothing}=nothing; grad::Bool=false) where T<:Real
+    #Integrate to right before the first transit expansion point. Save state and
+    #integrate for 7 steps at h=ts.h. Revert to pre-transit state and continue to
+    #next transit.
+
     if grad && d == nothing; d = Derivatives(T, s.n); end
     if ~grad && d !== nothing; grad = true; end
 
@@ -164,7 +208,19 @@ function compute_points!(s, ts, d, t, t0, h, ibody, itime, intr)
     return
 end
 
-"""Compute the transit times and 7 points about each.
+"""
+    (intr::Integrator)(s, ts, d=nothing; grad=false)
+
+Carry out N-body integration, compute transit times, and compute 7 points about each transit time.
+
+# Arguments
+- `s::State{T}` : N-body problem state.
+- `ts::TransitSeries{T, ComputedTimes}` : Transit series which will hold the computed transit times and expansion points.
+- `tt::TransitOutput{T}` : Transit timing from `NbodyGradient.jl`. Holds transit times and derivatives.
+### Optional
+- `d::Union{Derivatives, Nothing}=nothing` : Allows the user to provide a pre-allocated `Derivatives` type. If `nothing`, it will be allocated inside the function.
+### Keyword Args
+- `grad::Bool=false` : Whether to compute derivatives. Default is no derivatives (`false`).
 """
 function (intr::Integrator)(s::State{T},ts::TransitSeries{T, ComputedTimes},tt::TransitOutput{T},d::Union{Derivatives,Nothing}=nothing; grad::Bool=false) where T<:Real
     if d isa Nothing; d = Derivatives(T, s.n); end
