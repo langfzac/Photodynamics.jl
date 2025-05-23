@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Basic Usage · Photodynamics.jl</title><meta name="title" content="Basic Usage · Photodynamics.jl"/><meta property="og:title" content="Basic Usage · Photodynamics.jl"/><meta property="twitter:title" content="Basic Usage · Photodynamics.jl"/><meta name="description" content="Documentation for Photodynamics.jl."/><meta property="og:description" content="Documentation for Photodynamics.jl."/><meta property="twitter:description" content="Documentation for Photodynamics.jl."/><meta property="og:url" content="https://langfzac.github.io/Photodynamics.jl/basic/"/><meta property="twitter:url" content="https://langfzac.github.io/Photodynamics.jl/basic/"/><link rel="canonical" href="https://langfzac.github.io/Photodynamics.jl/basic/"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../">Photodynamics.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../">Home</a></li><li><span class="tocitem">Tutorials</span><ul><li class="is-active"><a class="tocitem" href>Basic Usage</a></li></ul></li><li><a class="tocitem" href="../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Tutorials</a></li><li class="is-active"><a href>Basic Usage</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Basic Usage</a></li></ul></nav><div class="docs-right"><a class="docs-navbar-link" href="https://github.com/langfzac/Photodynamics.jl/blob/main/docs/src/basic.md#" title="Edit source on GitHub"><span class="docs-icon fa-solid"></span></a><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Basic-Usage"><a class="docs-heading-anchor" href="#Basic-Usage">Basic Usage</a><a id="Basic-Usage-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Usage" title="Permalink"></a></h1><p>Here we walk through an example of generating a light curve for a 3-body system.</p><h5 id="Units"><a class="docs-heading-anchor" href="#Units">Units</a><a id="Units-1"></a><a class="docs-heading-anchor-permalink" href="#Units" title="Permalink"></a></h5><p>A quick note on units.</p><ul><li>Distance: AU</li><li>Time: Days</li><li>Mass: Solar Masses</li><li>Angles: Radians</li></ul><h3 id="Transit-Model"><a class="docs-heading-anchor" href="#Transit-Model">Transit Model</a><a id="Transit-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Transit-Model" title="Permalink"></a></h3><p>We start by defining the stellar/transit parameters:</p><pre><code class="language-julia hljs">using Photodynamics
+
+rstar = 0.00465047 * 0.1192 # Radius of the star (AU)
+k = [0.085, 0.083]  # Planet-star radius ratios
+u_n = [0.28, 0.11]  # Limbdarkening coefficients</code></pre><p>Next, we set up the simulated light curve. We assume uniform cadence over length of the observations:</p><pre><code class="language-julia hljs">exp_time = 2 / 60 / 24 # 2 min cadence in days
+obs_duration = 2.0 # 2 days total observations
+lc = Lightcurve(exp_time, obs_duration, u_n, k, rstar)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Lightcurve{Float64}
+Cadence: 120.0 s
+Duration of observations: 2.0 d
+Number of exposures: 1441</code></pre><h3 id="Dynamical-Model"><a class="docs-heading-anchor" href="#Dynamical-Model">Dynamical Model</a><a id="Dynamical-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Dynamical-Model" title="Permalink"></a></h3><p>We re-export the <code>NbodyGradient.jl</code> API for initial conditions. See the docs for more details (<a href="https://ericagol.github.io/NbodyGradient.jl/dev/">NbodyGradient.jl docs</a>)</p><p>Start by defining the dynamical model initial conditions:</p><pre><code class="language-julia hljs">star = Elements(m = 1.0) # Mass of the star (solar masses)
+planet_b = Elements(
+    m = 3e-5,      # Planet mass (solar masses)
+    P = 1.5,       # Period (days)
+    t0 = 0.32,     # Initial time of transit (days from start of simulation)
+    ecosω = 0.03,  # Eccentricity vector component (eccentricity * cos(argument of periastron))
+    I = π/2)       # Inclination (radians; edge-on)
+planet_c = Elements(
+    m = 6e-5,
+    P = 24,
+    t0 = 0.35,
+    ecosω = 0.02,
+    I = π/2)
+
+t0 = 0.0 # Time of initial conditions
+N = 3 # Number of bodies (or a hierarchy matrix; see NbodyGradient.jl docs)
+ic = ElementsIC(t0, N, star, planet_b, planet_c)</code></pre><p>Set up the <code>NbodyGradient.jl</code> integrator:</p><pre><code class="language-julia hljs">h = 0.05 # Time step [days]
+intr = Integrator(h, obs_duration)
+nothing # hide</code></pre><p>Now we integrate the N-body system, record the transit times, and compute the PK20 expansion points about each transit:</p><pre><code class="language-julia hljs">s = State(ic) # Get initial Cartesian coordinates from orbital elements
+tt = TransitTiming(obs_duration, ic) # Pre-allocate transit timing arrays
+ts = TransitSeries(obs_duration, ic) # Pre-allocate expansion point arrays
+intr(s, ts, tt) # Dispatch on the desired outputs</code></pre><h3 id="Generating-a-light-curve"><a class="docs-heading-anchor" href="#Generating-a-light-curve">Generating a light curve</a><a id="Generating-a-light-curve-1"></a><a class="docs-heading-anchor-permalink" href="#Generating-a-light-curve" title="Permalink"></a></h3><p>Finally, we combine the photometric and dynamical model output and compute a light curve:</p><pre><code class="language-julia hljs">compute_lightcurve!(lc, ts)</code></pre><p>Plot a section of the light curve:</p><pre><code class="language-julia hljs">using Plots
+mask = 0.3 .&lt; lc.tobs .&lt; 0.375
+plot!(lc.tobs[mask], lc.flux[mask] .+ 1, legend=false, marker=true)
+xlabel!(&quot;Time [Days]&quot;); ylabel!(&quot;Relative Flux&quot;)</code></pre><img src="abcce76c.svg" alt="Example block output"/><h3 id="Modifying-light-curve-parameters"><a class="docs-heading-anchor" href="#Modifying-light-curve-parameters">Modifying light curve parameters</a><a id="Modifying-light-curve-parameters-1"></a><a class="docs-heading-anchor-permalink" href="#Modifying-light-curve-parameters" title="Permalink"></a></h3><p>Since the transit and dynamical models are computed independently, we can modify the light curve parameters without needing to re-compute the N-body integration. </p><p>As an example, let&#39;s say we want to better resolve the ingress/egress. We can simply decrease the exposure times and recompute the light curve:</p><pre><code class="language-julia hljs">exp_time = exp_time / 20 # reduce the exposure times
+lc = Lightcurve(exp_time, obs_duration, u_n, k, rstar)
+compute_lightcurve!(lc, ts)
+
+mask = 0.3 .&lt; lc.tobs .&lt; 0.375
+plot(lc.tobs[mask], lc.flux[mask] .+ 1, legend=false, marker=true)
+xlabel!(&quot;Time [Days]&quot;); ylabel!(&quot;Relative Flux&quot;)</code></pre><img src="e1d64449.svg" alt="Example block output"/><p>We can also make changes to the dynamical parameters. Let&#39;s change the inclination of one of the planets:</p><pre><code class="language-julia hljs">planet_c = Elements(
+    m = 6e-5,
+    P = 24,
+    t0 = 0.35,
+    ecosω = 0.02,
+    I = π/2+0.002) # Vary the inclination
+ic = ElementsIC(t0, N, star, planet_b, planet_c) # Re-initialize
+s = State(ic)
+tt = TransitTiming(obs_duration, ic)
+ts = TransitSeries(obs_duration, ic)
+intr(s, ts, tt)
+
+# Plot original and new light curve
+mask = 0.3 .&lt; lc.tobs .&lt; 0.375
+plot(lc.tobs[mask], lc.flux[mask] .+ 1, lw=3, label=&quot;Original&quot;)
+xlabel!(&quot;Time [Days]&quot;); ylabel!(&quot;Relative Flux&quot;)
+
+# Compute the new light curve and plot
+compute_lightcurve!(lc, ts)
+plot!(lc.tobs[mask], lc.flux[mask] .+ 1, lw=2, label=&quot;Modified&quot;)</code></pre><img src="eaff7d85.svg" alt="Example block output"/><h3 id="Multi-band-light-curves"><a class="docs-heading-anchor" href="#Multi-band-light-curves">Multi-band light curves</a><a id="Multi-band-light-curves-1"></a><a class="docs-heading-anchor-permalink" href="#Multi-band-light-curves" title="Permalink"></a></h3><p>We can model photometry from multiple instruments with different wavelength bands, which will have different limbdarkening coefficients. We use the same N-body model for both:</p><pre><code class="language-julia hljs">u_n_1 = copy(u_n)
+u_n_2 = [0.1, 0.22]
+lc_1 = Lightcurve(exp_time, obs_duration, u_n_1, k, rstar)
+lc_2 = Lightcurve(exp_time, obs_duration, u_n_2, k, rstar)
+compute_lightcurve!.([lc_1, lc_2], ts) # Vectorize over the light curve objects
+
+mask_1 = 0.3 .&lt; lc_1.tobs .&lt; 0.375
+mask_2 = 0.3 .&lt; lc_2.tobs .&lt; 0.375
+plot(lc_1.tobs[mask_1], lc_1.flux[mask_1] .+ 1, lw=3, label=&quot;Original&quot;)
+plot!(lc_2.tobs[mask_2], lc_2.flux[mask_2] .+ 1, lw=2, label=&quot;Modified&quot;)
+xlabel!(&quot;Time [Days]&quot;); ylabel!(&quot;Relative Flux&quot;)</code></pre><img src="4c4332d0.svg" alt="Example block output"/><h3 id="Derivative-Lightcurves"><a class="docs-heading-anchor" href="#Derivative-Lightcurves">Derivative Lightcurves</a><a id="Derivative-Lightcurves-1"></a><a class="docs-heading-anchor-permalink" href="#Derivative-Lightcurves" title="Permalink"></a></h3><p>To generate derivatives of the flux with respect to the model parameters we first need to get the derivatives for the dynamical model. We simply re-initialize the N-body simulation and run the integration with the <code>grad=true</code> keyword.</p><pre><code class="language-julia hljs">s = State(ic)
+tt = TransitTiming(obs_duration, ic)
+ts = TransitSeries(obs_duration, ic)
+intr(s, ts, tt; grad=true)</code></pre><p>Then, we get a differentiable light curve (<code>dLightcurve</code> tells <code>compute_lightcurve!</code> to compute derivatives):</p><pre><code class="language-julia hljs">dlc = dLightcurve(exp_time, obs_duration, u_n, k, rstar)
+compute_lightcurve!(dlc, ts)</code></pre><p>We now have the derivatives of the light curve with respect to the initial stellar parameters, masses, and initial <em>Cartesian</em> coordinates.  If we want the derivatives with respect to the orbital elements, we run:</p><pre><code class="language-julia hljs">transform_to_elements!(s, dlc)</code></pre><p>Now we visualize the same transits, but plot the derivatives of the flux with respect to the inital mass of the planets. The <code>dLightcurve</code> type has a field <code>dfdelements</code> which is a <code>Matrix</code> of dimension number-of-exposure-times X orbital-element-index. The orbital elements are ordered (P, t0, ecosω, esinω, I, Ω, m). So, to get the mass of planet b, we want orbital element index <code>14</code> (for flexibility, the indices include the &quot;orbital elements of the star&quot;. So, the planets start at index <code>8</code>). </p><pre><code class="language-julia hljs">mask = 0.3 .&lt; dlc.tobs .&lt; 0.375
+p1 = plot(dlc.tobs[mask], dlc.dfdelements[mask,14], legend=false, lw=3)
+ylabel!(&quot;dF / dm_b&quot;)
+p2 = plot(dlc.tobs[mask], dlc.dfdelements[mask,21], legend=false, lw=3, color=2)
+xlabel!(&quot;Time [Days]&quot;); ylabel!(&quot;dF / dm_c&quot;)
+plot(p1,p2,layout=(2,1))</code></pre><img src="d132c85c.svg" alt="Example block output"/><p>Similarly, we can access the other parameter derivative light curves. Below shows these fields and how the arrays are indexed:</p><pre><code class="language-julia hljs">dlc.dfdr  # Stellar radius [times]
+dlc.dfdu  # Limbdark coefficients [times X u_n]
+dlc.dfdk  # Radius ratios [times X k]
+dlc.dfdq0 # Cartesian coordinates [times X cartesian coordinates]</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../">« Home</a><a class="docs-footer-nextpage" href="../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.11.4 on <span class="colophon-date" title="Friday 23 May 2025 22:12">Friday 23 May 2025</span>. Using Julia version 1.10.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
