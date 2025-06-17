@@ -15,7 +15,10 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Tutorials" => ["basic.md"],
+        "API" => "api.md"
     ],
+    warnonly=[:missing_docs]
 )
 
 deploydocs(;

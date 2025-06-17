@@ -4,51 +4,51 @@ on:
     branches:
       - main
     tags: '*'
-    paths-ignore:
-      - 'README.md'
-      - 'notebooks/**'
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'docs/**'
+      - '.github/workflows/CI.yml'
+      - 'Project.toml'
   pull_request:
-    paths-ignore:
-      - 'README.md'
-      - 'notebooks/**'
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'docs/**'
+      - '.github/workflows/CI.yml'
+      - 'Project.toml'
 
 jobs:
   test:
-    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    name: Julia ${{ matrix.julia-version }} - ${{ matrix.os }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        version:
-          - '1.6'
-          - '1'
-        os:
-          - ubuntu-latest
-          - macOS-latest
-        arch:
-          - x64
+        julia-version: ['1', 'lts']
+        os: [ubuntu-latest, macOS-latest]
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
-          version: ${{ matrix.version }}
-          arch: ${{ matrix.arch }}
+          version: ${{ matrix.julia-version }}
+          arch: 'default'
           show-versioninfo: true
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v2
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-runtest@v1
       - uses: julia-actions/julia-processcoverage@v1
-      - uses: codecov/codecov-action@v2
+      - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
   docs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: julia-actions/setup-julia@v1
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
         with:
-          version: '1'
+          version: 'lts'
       - uses: julia-actions/julia-buildpkg@v1
       - uses: julia-actions/julia-docdeploy@v1
         env:

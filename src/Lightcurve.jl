@@ -1,6 +1,36 @@
 # User-level methods to compute lightcurves
 abstract type AbstractLightcurve{T} end
 
+Base.broadcastable(lc::AbstractLightcurve) = Ref(lc)
+
+"""
+    Lightcurve{T<:Real} <: AbstractLightcurve{T}
+
+A simulated lightcurve.
+
+# Constructor
+    Lightcurve(dt, tobs, fobs, eobs, u_n, k, rstar)
+## Arguments
+- `dt::T` : Exposure time [days].
+- `tobs::Vector{T}` : Time of observations [days].
+- `fobs::Vector{T}` : Relative flux observations.
+- `eobs::Vector{T}` : Uncertainity on relative flux observations.
+- `u_n::Vector{T}` : Stellar limbdarkening coefficients.
+- `k::Vector{T}` : Planet-Star radius ratios.
+- `rstar::T` : Stellar radius [AU] 
+
+# Fields (relevant to the user)
+## Lightcurve parameters
+- `dt::T` : Exposure time [days].
+- `tobs::Vector{T}` : Time of observations [days].
+- `fobs::Vector{T}` : Relative flux observations.
+- `eobs::Vector{T}` : Uncertainity on relative flux observations.
+- `flux::Vector{T}` : Simulated flux at `tobs` observation times.
+## Transit parameters
+- `u_n::Vector{T}` : Stellar limbdarkening coefficients.
+- `k::Vector{T}` : Planet-Star radius ratios.
+- `rstar::Vector{T}` : Stellar radius [AU]
+"""
 struct Lightcurve{T<:Real} <: AbstractLightcurve{T}
     dt::T             # Exposure time
     tobs::Vector{T}   # Observed times
@@ -30,6 +60,40 @@ struct Lightcurve{T<:Real} <: AbstractLightcurve{T}
     end
 end
 
+"""
+    dLightcurve{T<:Real} <: AbstractLightcurve{T}
+
+A simulated lightcurve and the derivatives of the flux with respect to the model parameters
+
+# Constructor
+    Lightcurve(dt, tobs, fobs, eobs, u_n, k, rstar)
+## Arguments
+- `dt::T` : Exposure time [days].
+- `tobs::Vector{T}` : Time of observations [days].
+- `fobs::Vector{T}` : Relative flux observations.
+- `eobs::Vector{T}` : Uncertainity on relative flux observations.
+- `u_n::Vector{T}` : Stellar limbdarkening coefficients.
+- `k::Vector{T}` : Planet-Star radius ratios.
+- `rstar::T` : Stellar radius [AU] 
+
+# Fields (relevant to the user)
+## Lightcurve parameters
+- `dt::T` : Exposure time [days].
+- `tobs::Vector{T}` : Time of observations [days].
+- `fobs::Vector{T}` : Relative flux observations.
+- `eobs::Vector{T}` : Uncertainity on relative flux observations.
+- `flux::Vector{T}` : Simulated flux at `tobs` observation times.
+## Transit parameters
+- `u_n::Vector{T}` : Stellar limbdarkening coefficients.
+- `k::Vector{T}` : Planet-Star radius ratios.
+- `rstar::Vector{T}` : Stellar radius [AU].
+## Jacobians
+- `dfdr::Vector{T}` : Derivatives of the flux w.r.t. the stellar radius
+- `dfdu::Matrix{T}` : Derivatives of the flux w.r.t. the limbdarkening coefficients.
+- `dfdk::Matrix{T}` : Derivatives of the flux w.r.t. the radius ratios.
+- `dfdq0::Matrix{T}` : Derivatives of the flux w.r.t. the initial Cartesian coordinates and planet masses
+- `dfdelements::Matrix{T}` : Derivatives of the flux w.r.t. the initial orbital elements and planet masses
+"""
 struct dLightcurve{T<:Real} <: AbstractLightcurve{T}
     dt::T             # Exposure time
     tobs::Vector{T}   # Observed times
@@ -72,15 +136,52 @@ struct dLightcurve{T<:Real} <: AbstractLightcurve{T}
 
 end
 
-"""Setup Lightcurve without having data"""
+"""
+    Lightcurve(dt, duration, u_n, k, rstar)
+
+Setup a [`Lightcurve`](@ref) without having data.
+
+## Arguments
+- `dt::T` : Exposure time [days].
+- `duration::T` : Duration of observations [days].
+- `u_n::Vector{T}` : Stellar limbdarkening coefficients.
+- `k::Vector{T}` : Planet-Star radius ratios.
+- `rstar::T` : Stellar radius [AU] 
+"""
 function Lightcurve(dt::T, duration::T, u_n::Vector{T}, k::Vector{T}, rstar::T) where T<:Real
     tobs = collect(0.0:dt:duration)
     return Lightcurve(dt, tobs, zeros(T, size(tobs)), zeros(T,size(tobs)), u_n, k, rstar)
 end
 
+Base.show(io::IO, ::MIME"text/plain", lc::Lightcurve{T}) where {T} = begin
+    println(io, "Lightcurve{$T}")
+    println(io, "Cadence: $(round(first(lc.dt)*86400, digits=3)) s")
+    println(io, "Duration of observations: $(round((lc.tobs[end] - lc.tobs[begin]), digits=3)) d")
+    print(io, "Number of exposures: $(length(lc.tobs))")
+end
+
+"""
+    dLightcurve(dt, duration, u_n, k, rstar)
+
+Setup a [`dLightcurve`](@ref) without having data.
+
+## Arguments
+- `dt::T` : Exposure time [days].
+- `duration::T` : Duration of observations [days].
+- `u_n::Vector{T}` : Stellar limbdarkening coefficients.
+- `k::Vector{T}` : Planet-Star radius ratios.
+- `rstar::T` : Stellar radius [AU] 
+"""
 function dLightcurve(dt::T, duration::T, u_n::Vector{T}, k::Vector{T}, rstar::T) where T<:Real
     tobs = collect(0.0:dt:duration)
     return dLightcurve(dt, tobs, zeros(T, size(tobs)), zeros(T,size(tobs)), u_n, k, rstar)
+end
+
+Base.show(io::IO, ::MIME"text/plain", lc::dLightcurve{T}) where {T} = begin
+    println(io, "dLightcurve{$T}")
+    println(io, "Cadence: $(round(first(lc.dt)*86400, digits=3)) s")
+    println(io, "Duration of observations: $(round((lc.tobs[end] - lc.tobs[begin]), digits=3)) d")
+    print(io, "Number of exposures: $(length(lc.tobs))")
 end
 
 """Zero out the model arrays"""
@@ -135,6 +236,19 @@ function points_of_contact_2(t0::T,tt::T,h::T,points::AbstractMatrix{T},k::T) wh
     return SVector{2, T}(t1,t4)
 end
 
+"""
+    compute_lightcurve!(lc, ts; tol=1e-6, maxdepth=6, body_index=0)
+
+Compute a light curve from N-body results (`TransitSeries`) and a specified set of transit parameters (`AbstractLightcurve`).
+
+# Arguments
+- `lc::AbstractLightcurve{T}` : Lightcurve object
+- `ts::TransitSeries{T, TT}` : Transit series object
+### Optional
+- `tol::T=1e-6` : Tolerance of the Simpsons integration.
+- `maxdepth::Int64=6` : maximum depth for the Simpsons integration.
+- `body_index::Int64=0` : If non-zero, this picks out a particular planet and only computes the transits of that planet.
+"""
 function compute_lightcurve!(lc::AbstractLightcurve{T}, ts::TransitSeries{T, TT}; tol::T=1e-6, maxdepth::Int64=6, body_index::Int64=0) where {T<:Real, TT<:AbstractTransitTimes}
 
     zero_out!(lc) # Zero out model arrays
@@ -313,9 +427,15 @@ function compute_flux!(tc::T, t0::T, xc, yc, dxc, dyc, lc, trans, i, ki, inv_rst
     return
 end
 
-# There should be a way to do this using sparse matrices
 """
-Transform the jacobian wrt the initial Cartesian coordinates to initial orbital
-elements.
+    transform_to_elements!(s, dlc)
+
+Compute the transformation of the derivatives of the flux with respect to the initial Cartesian
+coordinates to derivatives with respect to the initial orbital elements. This updates `lc.dfdelements`
+in-place.
+
+# Arguments
+- `s::State{T}` : N-body state. Holds Jacobian of the orbital elements to Cartesian transformation.
+- `dlc::dLightcurve{T}` : A differentiable light curve object.
 """
 transform_to_elements!(s::State{T}, lc::dLightcurve{T}) where T<:Real = mul!(lc.dfdelements, lc.dfdq0, s.jac_init);
